@@ -356,19 +356,6 @@
          <string>Current position:</string>
         </property>
        </widget>
-       <widget class="QCheckBox" name="toggleLaserCheckBox">
-        <property name="geometry">
-         <rect>
-          <x>160</x>
-          <y>100</y>
-          <width>121</width>
-          <height>22</height>
-         </rect>
-        </property>
-        <property name="text">
-         <string>Toggle Laser</string>
-        </property>
-       </widget>
       </widget>
       <widget class="QFrame" name="frame_2">
        <property name="geometry">
@@ -491,15 +478,15 @@
         </rect>
        </property>
        <property name="currentIndex">
-        <number>7</number>
+        <number>8</number>
        </property>
-       <widget class="QWidget" name="page">
+       <widget class="QWidget" name="crossHairPage">
         <property name="geometry">
          <rect>
           <x>0</x>
           <y>0</y>
           <width>381</width>
-          <height>403</height>
+          <height>372</height>
          </rect>
         </property>
         <attribute name="label">
@@ -557,7 +544,7 @@
           <x>0</x>
           <y>0</y>
           <width>381</width>
-          <height>403</height>
+          <height>372</height>
          </rect>
         </property>
         <attribute name="label">
@@ -892,7 +879,7 @@
           <x>0</x>
           <y>0</y>
           <width>381</width>
-          <height>403</height>
+          <height>372</height>
          </rect>
         </property>
         <attribute name="label">
@@ -931,7 +918,7 @@
           <x>0</x>
           <y>0</y>
           <width>381</width>
-          <height>403</height>
+          <height>372</height>
          </rect>
         </property>
         <attribute name="label">
@@ -1018,7 +1005,7 @@
           <x>0</x>
           <y>0</y>
           <width>381</width>
-          <height>403</height>
+          <height>372</height>
          </rect>
         </property>
         <attribute name="label">
@@ -1105,7 +1092,7 @@
           <x>0</x>
           <y>0</y>
           <width>381</width>
-          <height>403</height>
+          <height>372</height>
          </rect>
         </property>
         <attribute name="label">
@@ -1192,7 +1179,7 @@
           <x>0</x>
           <y>0</y>
           <width>381</width>
-          <height>403</height>
+          <height>372</height>
          </rect>
         </property>
         <attribute name="label">
@@ -1218,7 +1205,7 @@
           <x>0</x>
           <y>0</y>
           <width>381</width>
-          <height>403</height>
+          <height>372</height>
          </rect>
         </property>
         <attribute name="label">
@@ -1491,6 +1478,105 @@
          </property>
          <property name="segmentStyle">
           <enum>QLCDNumber::Flat</enum>
+         </property>
+        </widget>
+       </widget>
+       <widget class="QWidget" name="laserPage">
+        <attribute name="label">
+         <string>Laser Selection / Override</string>
+        </attribute>
+        <widget class="QCheckBox" name="toggleLeftLaserCheckBox">
+         <property name="geometry">
+          <rect>
+           <x>10</x>
+           <y>0</y>
+           <width>171</width>
+           <height>22</height>
+          </rect>
+         </property>
+         <property name="text">
+          <string>Override Left Laser</string>
+         </property>
+        </widget>
+        <widget class="QCheckBox" name="toggleRightLaserCheckBox">
+         <property name="geometry">
+          <rect>
+           <x>10</x>
+           <y>30</y>
+           <width>171</width>
+           <height>22</height>
+          </rect>
+         </property>
+         <property name="text">
+          <string>Override Right Laser</string>
+         </property>
+        </widget>
+        <widget class="QCheckBox" name="toggleUseRightLaserCheckBox">
+         <property name="geometry">
+          <rect>
+           <x>10</x>
+           <y>90</y>
+           <width>171</width>
+           <height>22</height>
+          </rect>
+         </property>
+         <property name="text">
+          <string>Use Right Laser</string>
+         </property>
+        </widget>
+        <widget class="QCheckBox" name="toggleUseLeftLaserCheckBox">
+         <property name="geometry">
+          <rect>
+           <x>10</x>
+           <y>60</y>
+           <width>171</width>
+           <height>22</height>
+          </rect>
+         </property>
+         <property name="text">
+          <string>Use Left Laser</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="label_18">
+         <property name="geometry">
+          <rect>
+           <x>20</x>
+           <y>130</y>
+           <width>161</width>
+           <height>35</height>
+          </rect>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>11</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>Angle of lasers relative to cam (degrees):</string>
+         </property>
+         <property name="wordWrap">
+          <bool>true</bool>
+         </property>
+        </widget>
+        <widget class="QDoubleSpinBox" name="degreeLaserAngle">
+         <property name="geometry">
+          <rect>
+           <x>190</x>
+           <y>130</y>
+           <width>70</width>
+           <height>35</height>
+          </rect>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>14</pointsize>
+          </font>
+         </property>
+         <property name="decimals">
+          <number>1</number>
+         </property>
+         <property name="value">
+          <double>36.899999999999999</double>
          </property>
         </widget>
        </widget>

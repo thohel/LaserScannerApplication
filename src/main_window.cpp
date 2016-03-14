@@ -78,6 +78,10 @@ MainWindow::MainWindow(int argc, char** argv, QWidget *parent)
     // Signal that we should update our view
     QObject::connect(&qnode, SIGNAL(updateView(int)), this, SLOT(updateView(int)));
 
+    // Toggle lasers upon request of override
+    QObject::connect(ui->toggleLeftLaserCheckBox, SIGNAL(toggled(bool)), this, SLOT(toggleLasers(bool)));
+    QObject::connect(ui->toggleRightLaserCheckBox, SIGNAL(toggled(bool)), this, SLOT(toggleLasers(bool)));
+
     // Ensure the viewer is updated when a control is manipulated
     QObject::connect(ui->blueSliderMin, SIGNAL(valueChanged(int)), this, SLOT(updateView(int)));
     QObject::connect(ui->blueSliderMax, SIGNAL(valueChanged(int)), this, SLOT(updateView(int)));
@@ -125,10 +129,14 @@ void MainWindow::on_button_refresh_topic_clicked(bool check)
     Q_EMIT getTopics();
 }
 
-void MainWindow::on_toggleLaserCheckBox_toggled(bool check)
+void MainWindow::toggleLasers(bool check)
 {
-    if (ui->toggleLaserCheckBox->isChecked()) {
+    if (ui->toggleLeftLaserCheckBox->isChecked() && ui->toggleRightLaserCheckBox->isChecked()) {
         Q_EMIT setLasers(3);
+    } else if (ui->toggleLeftLaserCheckBox->isChecked()) {
+        Q_EMIT setLasers(1);
+    } else if (ui->toggleRightLaserCheckBox->isChecked()) {
+        Q_EMIT setLasers(2);
     } else {
         Q_EMIT setLasers(0);
     }
@@ -333,18 +341,13 @@ void MainWindow::processImageSet(cv::Mat before, cv::Mat after, cv::Mat referenc
 
 void MainWindow::performTriangulation(double amountRotated, cv::Mat img, cv::Mat color_img, pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, bool leftSide)
 {
-//    cloud.width    = 5;
-//    cloud.height   = 5;
-//    cloud.points.resize (cloud.width * cloud.height);
-
     int cam_res_vert = img.rows;
     int cam_res_hor = img.cols;
 
     double radiansToDegrees = 180.0 / 3.14159265359;
     double degreesToRadians = 3.14159265359 / 180.0;
 
-    // FIXME! Set the correct angle here
-    double laser_angle = 36.87;
+    double laser_angle = ui->degreeLaserAngle->value();
 
     // These values are not perfect, but the variance between cameras is good enough for now
     // Assumes hd resolution is used
@@ -478,7 +481,7 @@ void MainWindow::on_button_folder_select_clicked(bool check)
     ui->saveCheckBox->setEnabled(true);
 }
 
-void MainWindow::save_picture(cv::Mat picture, int number, bool after, bool reference, bool final)
+void MainWindow::save_picture(cv::Mat picture, int number, bool after, bool reference, bool final, bool leftSide)
 {
     if (!ui->saveCheckBox->isChecked())
         return;
@@ -499,28 +502,32 @@ void MainWindow::save_picture(cv::Mat picture, int number, bool after, bool refe
         url.append("_before");
     }
 
+    if (leftSide && !reference) {
+        url.append("_left");
+    } else if (!reference){
+        url.append("_right");
+    }
+
     url.append(".png");
-    std::cout << url.toUtf8().constData() << std::endl;
     cv::imwrite(url.toUtf8().constData(), picture);
 }
 
 void MainWindow::on_button_set_ref_images_clicked(bool check)
 {
     // Get an image with the lasers on
-    cv::Mat referenceAfter = getImage(3);
-    save_picture(referenceAfter, 0, true, true, false);
+    referenceAfter = getImage(3);
+    save_picture(referenceAfter, 0, true, true, false, false);
 
     // Get an image with the lasers off
-    cv::Mat referenceBefore = getImage(0);
-    save_picture(referenceBefore, 0, false, true, false);
+    referenceBefore = getImage(0);
+    save_picture(referenceBefore, 0, false, true, false, false);
 
     ui->diffReferenceCheckBox->setEnabled(true);
 }
 
 void MainWindow::on_button_auto_scan_clicked(bool check)
 {
-    // XXX. We need to spawn a worker thread as to not block the GUI
-    // Can not
+    // We need to spawn a worker thread as to not block the GUI
     boost::thread* thr = new boost::thread(boost::bind(&MainWindow::performAutoScan, this));
     ui->button_auto_scan->setEnabled(false);
 }
@@ -543,21 +550,38 @@ void MainWindow::performAutoScan()
     while (ui->current_position->value() < old_val + 360.0) {
         double new_pos = old_val + i*deg_per_pic;
 
-        // Get an image with the lasers on
-        cv::Mat after = getImage(3);
-        save_picture(after, i, true, false, false);
+        if (ui->toggleUseLeftLaserCheckBox) {
+            // Get an image with the left laser on
+            cv::Mat after = getImage(1);
+            save_picture(after, i, true, false, false, true);
 
-        // Get an image with the lasers off
-        cv::Mat before = getImage(0);
-        save_picture(before, i, false, false, false);
+            // Get an image with the lasers off
+            cv::Mat before = getImage(0);
+            save_picture(before, i, false, false, false, true);
+
+            // Process image and perform triangulation
+            processImageSet(before, after, referenceBefore, referenceAfter);
+            performTriangulation(deg_per_pic*((double) i), this->filtered, this->color_img, this->cloud, true);
+            save_picture(this->filtered, i, false, false, true, true);
+        }
+
+        if (ui->toggleUseRightLaserCheckBox) {
+            // Get an image with the right laser on
+            cv::Mat after = getImage(2);
+            save_picture(after, i, true, false, false, false);
+
+            // Get an image with the lasers off
+            cv::Mat before = getImage(0);
+            save_picture(before, i, false, false, false, false);
+
+            // Process image and perform triangulation
+            processImageSet(before, after, referenceBefore, referenceAfter);
+            performTriangulation(deg_per_pic*((double) i), this->filtered, this->color_img, this->cloud, false);
+            save_picture(this->filtered, i, false, false, true, false);
+        }
 
         // Increment the angle
         Q_EMIT setAngle(new_pos);
-
-        // Process image and perform triangulation
-        processImageSet(before, after, referenceBefore, referenceAfter);
-        performTriangulation(deg_per_pic*((double) i), this->filtered, this->color_img, this->cloud, false);
-        save_picture(this->filtered, i, false, false, true);
 
         // Wait until table has turned into position
         while (!(ui->current_position->value() < new_pos + 0.1 &&
@@ -582,10 +606,12 @@ void MainWindow::toggleFilter(bool filter)
 
 cv::Mat MainWindow::getImage(int lasers)
 {
-    // Take picture with laser
-    qnode.wait_for_laser = true;
-    Q_EMIT setLasers(lasers);
-    while (qnode.wait_for_laser.load());
+    if (!(ui->toggleLeftLaserCheckBox->isChecked() || ui->toggleRightLaserCheckBox)) {
+        // Take picture with laser
+        qnode.wait_for_laser = true;
+        Q_EMIT setLasers(lasers);
+        while (qnode.wait_for_laser.load());
+    }
 
     // Wait until picture is updated
     qnode.wait_for_pic = true;
@@ -593,12 +619,24 @@ cv::Mat MainWindow::getImage(int lasers)
     return qnode.getCurrentImage();
 }
 
-void MainWindow::updateFilteredImage()
+void MainWindow::updateFilteredImage(bool left, bool right)
 {
     wait_for_pic = true;
+    cv::Mat after;
 
-    // Get an image with the lasers on
-    cv::Mat after = getImage(3);
+    if (left && right) {
+        // Get an image with both lasers on
+        cv::Mat after = getImage(3);
+    } else if (left) {
+        // Get an image with left laser on
+        cv::Mat after = getImage(1);
+    } else if (right) {
+        // Get an image with right laser on
+        cv::Mat after = getImage(2);
+    } else {
+        // Get an image with the lasers off
+        cv::Mat after = getImage(0);
+    }
 
     // Get an image with the lasers off
     cv::Mat before = getImage(0);
@@ -617,7 +655,7 @@ void MainWindow::updateView(int i)
 
             // Add the pixmap to the label that presents it
             ui->imageLabel->setPixmap(pixMap);
-            boost::thread* thr = new boost::thread(boost::bind(&MainWindow::updateFilteredImage, this));
+            boost::thread* thr = new boost::thread(boost::bind(&MainWindow::updateFilteredImage, this, true, true));
         }
     }
 

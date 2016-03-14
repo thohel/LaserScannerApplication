@@ -51,13 +51,12 @@ public Q_SLOTS:
     void on_button_load_picture_clicked(bool check);
     void on_button_auto_scan_clicked(bool check);
     void on_button_set_ref_images_clicked(bool check);
-    void on_toggleLaserCheckBox_toggled(bool check);
     //Manual connections
     void readCurrentAngle(double d);
     void updateTopics(QStringList list);
     void toggleFilter(bool filter);
     void updateView(int i);
-    void updateFilteredImage();
+    void toggleLasers(bool check);
     cv::Mat getImage(int lasers);
 
 
@@ -81,11 +80,12 @@ private:
     cv::Mat color_img;
     void processImageSet(cv::Mat before, cv::Mat after, cv::Mat referenceBefore, cv::Mat referenceAfter);
     void performTriangulation(double amountRotated, cv::Mat img, cv::Mat color_img, pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, bool leftSide);
-    void save_picture(cv::Mat picture, int number, bool after, bool reference, bool final);
+    void save_picture(cv::Mat picture, int number, bool after, bool reference, bool final, bool leftSide);
     bool drawPointCloud;
     bool pointCloudWidgetAdded;
     boost::atomic_bool wait_for_pic;
     void spawnPointCloudWidget();
+    void updateFilteredImage(bool left, bool right);
 };
 
 }  // namespace LaserScannerApplication
