@@ -550,14 +550,14 @@ void MainWindow::performAutoScan()
     while (ui->current_position->value() < old_val + 360.0) {
         double new_pos = old_val + i*deg_per_pic;
 
+        // Get an image with the lasers off
+        cv::Mat before = getImage(0);
+        save_picture(before, i, false, false, false, true);
+
         if (ui->toggleUseLeftLaserCheckBox) {
             // Get an image with the left laser on
             cv::Mat after = getImage(1);
             save_picture(after, i, true, false, false, true);
-
-            // Get an image with the lasers off
-            cv::Mat before = getImage(0);
-            save_picture(before, i, false, false, false, true);
 
             // Process image and perform triangulation
             processImageSet(before, after, referenceBefore, referenceAfter);
@@ -569,10 +569,6 @@ void MainWindow::performAutoScan()
             // Get an image with the right laser on
             cv::Mat after = getImage(2);
             save_picture(after, i, true, false, false, false);
-
-            // Get an image with the lasers off
-            cv::Mat before = getImage(0);
-            save_picture(before, i, false, false, false, false);
 
             // Process image and perform triangulation
             processImageSet(before, after, referenceBefore, referenceAfter);
@@ -626,16 +622,16 @@ void MainWindow::updateFilteredImage(bool left, bool right)
 
     if (left && right) {
         // Get an image with both lasers on
-        cv::Mat after = getImage(3);
+        after = getImage(3);
     } else if (left) {
         // Get an image with left laser on
-        cv::Mat after = getImage(1);
+        after = getImage(1);
     } else if (right) {
         // Get an image with right laser on
-        cv::Mat after = getImage(2);
+        after = getImage(2);
     } else {
         // Get an image with the lasers off
-        cv::Mat after = getImage(0);
+        after = getImage(0);
     }
 
     // Get an image with the lasers off

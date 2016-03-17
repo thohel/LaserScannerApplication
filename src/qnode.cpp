@@ -113,8 +113,8 @@ bool QNode::pictureHasBeenSet()
 void QNode::setAngle(double angle)
 {
     std_msgs::Int32 msg;
-    //convert from 0-360 to 0-13760 here
-    msg.data = angle*38.222222222;
+    //convert from 0-360 to 0-14000 here
+    msg.data = angle*38.8888888;
     anglepub.publish(msg);
 }
 
@@ -127,7 +127,7 @@ void QNode::setLasers(int i)
 
 void QNode::angleCallback(const std_msgs::Int32::ConstPtr &msg)
 {
-    double angle = msg->data*0.0261627907;
+    double angle = msg->data*0.0257142857;
     Q_EMIT sendCurrentAngle(angle);
 }
 
