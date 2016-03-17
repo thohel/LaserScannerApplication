@@ -490,7 +490,7 @@ void MainWindow::save_picture(cv::Mat picture, int number, bool after, bool refe
     url.append("/");
     url.append(ui->fileName->text());
     url.append("_");
-    url.append(QString::number(number));
+    url.append(QString("%1").arg(number, 3, 10, QChar('0')));
 
     if (reference)
         url.append("_reference");
