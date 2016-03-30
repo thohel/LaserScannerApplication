@@ -429,6 +429,10 @@ void MainWindow::performTriangulation(double amountRotated, cv::Mat img, cv::Mat
         std::cout << "Radius is: " << averageRad << std::endl;
         radSum = 0.0;
         radCounter = 0;
+
+        if (!wait_for_point_cloud_viewer)
+            Q_EMIT updatePointCloudViewer();
+
     }
 }
 
@@ -499,6 +503,10 @@ void MainWindow::performAutoScan()
 {
     // XXX: Deactivate filter controls ++
 
+
+    // We have not set the point cloud viewer visible, we need to do that
+    spawnPointCloudWidget();
+
     // Change from image to point cloud visualization
     drawPointCloud = true;
 
@@ -530,7 +538,7 @@ void MainWindow::performAutoScan()
             save_picture(local_filtered, i, false, false, true, true);
         }
 
-        if (ui->toggleUseRightLaserCheckBox) {
+        if (ui->toggleUseRightLaserCheckBox->isChecked()) {
             // Get an image with the right laser on
             cv::Mat after = getImage(2);
             save_picture(after, i, true, false, false, false);
@@ -541,7 +549,7 @@ void MainWindow::performAutoScan()
             save_picture(local_filtered, i, false, false, true, false);
         }
 
-        updateImageToShow(local_filtered);
+        //updateImageToShow(local_filtered);
 
         // Increment the angle
         Q_EMIT setAngle(new_pos);
@@ -603,7 +611,8 @@ void MainWindow::updateFilteredImage(bool left, bool right)
     cv::Mat before = getImage(0);
 
     cv::Mat local_filtered = processImageSet(before, after, referenceBefore, referenceAfter);
-    Q_EMIT updateImageToShow(local_filtered);
+    // Q_EMIT updateImageToShow(local_filtered);
+    this->toShow = mat2qimage(local_filtered);
     wait_for_pic = false;
 }
 
@@ -618,23 +627,13 @@ void MainWindow::updateView(int i)
                                                                ui->toggleUseRightLaserCheckBox->isChecked()));
         }
 
-        if (!wait_for_image_to_show) {
+        if (!wait_for_image_to_show && !wait_for_pic) {
             QPixmap pixMap = QPixmap::fromImage(this->toShow);
 
             // Add the pixmap to the label that presents it
             ui->imageLabel->setPixmap(pixMap);
         }
 
-    }
-
-    // If we have reached the pointcloud stage then we should not show the image
-    if (drawPointCloud) {
-        // If we have not set the point cloud viewer visible then we need to do that
-        if (!pointCloudWidgetAdded) {
-            spawnPointCloudWidget();
-        }
-        if (!wait_for_point_cloud_viewer)
-            Q_EMIT updatePointCloudViewer();
     }
 }
 
@@ -652,8 +651,9 @@ void MainWindow::updatePointCloudViewer()
     wait_for_point_cloud_viewer = true;
 
     // If we have not added the pointcloud to the viewer then we should do that
-    if (cloud->empty())
+    if (this->cloud->empty())
         return;
+
     if (!pointCloudViewer->updatePointCloud(this->cloud, "displayCloud")) {
         pointCloudViewer->addPointCloud(this->cloud, "displayCloud");
         pointCloudViewer->spinOnce();
