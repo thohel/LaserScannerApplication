@@ -39,7 +39,6 @@ public:
     ~MainWindow();
     void closeEvent(QCloseEvent *event); // Overloaded function
     void showNoMasterMessage();
-    QImage mat2qimage(cv::Mat& mat);
     void performAutoScan();
 
 public Q_SLOTS:

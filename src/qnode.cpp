@@ -101,8 +101,6 @@ void QNode::imageCallback(const sensor_msgs::ImageConstPtr &image_msg)
 
     dump_pic_counter = dump_pic_counter % get_every_n_pics;
 
-    std::cout << "The counter is at " << dump_pic_counter << std::endl;
-
     // We want to early return exept every n pics;
     if (dump_pic_counter != 0)
         return;
@@ -117,9 +115,9 @@ void QNode::imageCallback(const sensor_msgs::ImageConstPtr &image_msg)
     if (processing_pic)
         return;
 
-    std::cout << "Setting the image pointer" << std::endl;
     imagePtr = image_msg;
 
+    wait_for_pic = false;
     pictureSet = true;
 }
 
@@ -130,8 +128,7 @@ void QNode::setAngle(double angle)
     msg.data = angle*38.8888888;
     wait_for_angle.store(true);
     anglepub.publish(msg);
-    while (current_angle < angle - 0.1 || current_angle > angle + 0.1)
-        std::cout << "Current angle is " << current_angle << "and wanted is " << angle << std::endl; // XXX: This is not good, there should be some infinite-loop-avoidance here
+    while (current_angle < angle - 0.1 || current_angle > angle + 0.1); // XXX: This is not good, there should be some infinite-loop-avoidance here
     wait_for_angle.store(false);
 }
 
@@ -159,16 +156,14 @@ void QNode::laserCallback(const std_msgs::Int32::ConstPtr &msg)
 cv::Mat QNode::getCurrentImage()
 {
     // Lock the mutex so that we can avoid queing up images
-    //picLock.lock();
     cv_bridge::CvImagePtr cvImage;
-
-  //  wait_for_pic = true;
 
     if (pictureHasBeenSet()) {
 
-        processing_pic = true;
+        // If we have already acquired this image then we want to wait for a new one
+        while (wait_for_pic);
 
-//        while (wait_for_pic);
+        processing_pic = true;
 
         // Convert ROS image message to opencv
         try {
@@ -184,6 +179,7 @@ cv::Mat QNode::getCurrentImage()
         std::cout << "Trying to convert an image that doesnt exist" << std::endl;
     }
 
+    wait_for_pic = true;
     return cvImage.get()->image;
 }
 

@@ -91,6 +91,7 @@ private:
     double current_angle;
     boost::atomic_bool wait_for_laser;
     boost::atomic_bool wait_for_angle;
+    boost::atomic_bool wait_for_pic;
     boost::atomic_bool processing_pic;
     static const int get_every_n_pics = 3;
     int dump_pic_counter;

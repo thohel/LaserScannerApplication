@@ -14,6 +14,7 @@
 #include <iostream>
 #include <fstream>
 #include "../include/LaserScannerApplication/main_window.hpp"
+#include "../include/LaserScannerApplication/QImageCvMat.hpp"
 #include <boost/thread.hpp>
 
 /*****************************************************************************
@@ -129,19 +130,6 @@ void MainWindow::on_button_refresh_topic_clicked(bool check)
     Q_EMIT getTopics();
 }
 
-void MainWindow::toggleLasers(bool check)
-{
-    if (ui->toggleLeftLaserCheckBox->isChecked() && ui->toggleRightLaserCheckBox->isChecked()) {
-        Q_EMIT setLasers(3);
-    } else if (ui->toggleLeftLaserCheckBox->isChecked()) {
-        Q_EMIT setLasers(1);
-    } else if (ui->toggleRightLaserCheckBox->isChecked()) {
-        Q_EMIT setLasers(2);
-    } else {
-        Q_EMIT setLasers(0);
-    }
-}
-
 void MainWindow::on_button_subscribe_topic_clicked(bool check)
 {
     if (ui->comboBox->currentText().length() != 0) {
@@ -160,42 +148,17 @@ void MainWindow::on_button_load_picture_clicked(bool check)
     std::cout << "Not yet implemented" << std::endl;
 }
 
-QImage MainWindow::mat2qimage(cv::Mat& mat) {
-    switch (mat.type()) {
-        // 8-bit, 4 channel
-        case CV_8UC4: {
-            QImage image(mat.data, mat.cols, mat.rows, mat.step, QImage::Format_RGB32);
-            return image;
-        }
-
-        // 8-bit, 3 channel
-        case CV_8UC3: {
-            QImage image(mat.data, mat.cols, mat.rows, mat.step, QImage::Format_RGB888);
-            return image.rgbSwapped();
-        }
-
-        // 8-bit, 1 channel
-        case CV_8UC1: {
-            static QVector<QRgb>  sColorTable;
-
-            // only create our color table once
-            if (sColorTable.isEmpty()) {
-                for (int i = 0; i < 256; ++i)
-                    sColorTable.push_back(qRgb(i, i, i));
-            }
-
-            QImage image(mat.data, mat.cols, mat.rows, mat.step, QImage::Format_Indexed8);
-            image.setColorTable(sColorTable);
-
-            return image;
-        }
-
-        default:
-            std::cout << "ASM::cvMatToQImage() - cv::Mat image type not handled in switch:" << mat.type();
-            break;
+void MainWindow::toggleLasers(bool check)
+{
+    if (ui->toggleLeftLaserCheckBox->isChecked() && ui->toggleRightLaserCheckBox->isChecked()) {
+        Q_EMIT setLasers(3);
+    } else if (ui->toggleLeftLaserCheckBox->isChecked()) {
+        Q_EMIT setLasers(1);
+    } else if (ui->toggleRightLaserCheckBox->isChecked()) {
+        Q_EMIT setLasers(2);
+    } else {
+        Q_EMIT setLasers(0);
     }
-
-    return QImage();
 }
 
 void MainWindow::processImageSet(cv::Mat before, cv::Mat after, cv::Mat referenceBefore, cv::Mat referenceAfter)
@@ -554,7 +517,7 @@ void MainWindow::performAutoScan()
         cv::Mat before = getImage(0);
         save_picture(before, i, false, false, false, true);
 
-        if (ui->toggleUseLeftLaserCheckBox) {
+        if (ui->toggleUseLeftLaserCheckBox->isChecked()) {
             // Get an image with the left laser on
             cv::Mat after = getImage(1);
             save_picture(after, i, true, false, false, true);
