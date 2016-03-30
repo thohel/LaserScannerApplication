@@ -651,7 +651,9 @@ void MainWindow::updateView(int i)
 
             // Add the pixmap to the label that presents it
             ui->imageLabel->setPixmap(pixMap);
-            boost::thread* thr = new boost::thread(boost::bind(&MainWindow::updateFilteredImage, this, true, true));
+            boost::thread* thr = new boost::thread(boost::bind(&MainWindow::updateFilteredImage, this,
+                                                               ui->toggleUseLeftLaserCheckBox->isChecked(),
+                                                               ui->toggleUseRightLaserCheckBox->isChecked()));
         }
     }
 
