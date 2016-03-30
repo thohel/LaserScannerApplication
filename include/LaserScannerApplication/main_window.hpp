@@ -57,7 +57,7 @@ public Q_SLOTS:
     void updateView(int i);
     void toggleLasers(bool check);
     cv::Mat getImage(int lasers);
-
+    void updatePointCloudViewer();
 
 Q_SIGNALS:
     void getTopics();
@@ -68,7 +68,7 @@ Q_SIGNALS:
 private:
     Ui::MainWindowDesign *ui;
     QNode qnode;
-    boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
+    boost::shared_ptr<pcl::visualization::PCLVisualizer> pointCloudViewer;
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud;
     QVTKWidget *w;
     int left;
@@ -77,14 +77,18 @@ private:
     cv::Mat referenceAfter;
     cv::Mat filtered;
     cv::Mat color_img;
-    void processImageSet(cv::Mat before, cv::Mat after, cv::Mat referenceBefore, cv::Mat referenceAfter);
+    cv::Mat processImageSet(cv::Mat before, cv::Mat after, cv::Mat referenceBefore, cv::Mat referenceAfter);
     void performTriangulation(double amountRotated, cv::Mat img, cv::Mat color_img, pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, bool leftSide);
     void save_picture(cv::Mat picture, int number, bool after, bool reference, bool final, bool leftSide);
     bool drawPointCloud;
     bool pointCloudWidgetAdded;
     boost::atomic_bool wait_for_pic;
+    boost::atomic_bool wait_for_image_to_show;
+    boost::atomic_bool wait_for_point_cloud_viewer;
     void spawnPointCloudWidget();
     void updateFilteredImage(bool left, bool right);
+    void updateImageToShow(cv::Mat image);
+    QImage toShow;
 };
 
 }  // namespace LaserScannerApplication

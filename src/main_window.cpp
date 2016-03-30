@@ -161,7 +161,7 @@ void MainWindow::toggleLasers(bool check)
     }
 }
 
-void MainWindow::processImageSet(cv::Mat before, cv::Mat after, cv::Mat referenceBefore, cv::Mat referenceAfter)
+cv::Mat MainWindow::processImageSet(cv::Mat before, cv::Mat after, cv::Mat referenceBefore, cv::Mat referenceAfter)
 {
     cv::Mat final = after;
     cv::Mat temp;
@@ -298,8 +298,8 @@ void MainWindow::processImageSet(cv::Mat before, cv::Mat after, cv::Mat referenc
         final = temp;
     }
 
-    this->filtered = final;
-    this->color_img = before;
+    return final;
+//    this->color_img = before;
 }
 
 void MainWindow::performTriangulation(double amountRotated, cv::Mat img, cv::Mat color_img, pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, bool leftSide)
@@ -513,6 +513,8 @@ void MainWindow::performAutoScan()
     while (ui->current_position->value() < old_val + 360.0) {
         double new_pos = old_val + i*deg_per_pic;
 
+        cv::Mat local_filtered;
+
         // Get an image with the lasers off
         cv::Mat before = getImage(0);
         save_picture(before, i, false, false, false, true);
@@ -523,9 +525,9 @@ void MainWindow::performAutoScan()
             save_picture(after, i, true, false, false, true);
 
             // Process image and perform triangulation
-            processImageSet(before, after, referenceBefore, referenceAfter);
-            performTriangulation(deg_per_pic*((double) i), this->filtered, this->color_img, this->cloud, true);
-            save_picture(this->filtered, i, false, false, true, true);
+            local_filtered = processImageSet(before, after, referenceBefore, referenceAfter);
+            performTriangulation(deg_per_pic*((double) i), local_filtered, this->color_img, this->cloud, true);
+            save_picture(local_filtered, i, false, false, true, true);
         }
 
         if (ui->toggleUseRightLaserCheckBox) {
@@ -535,9 +537,11 @@ void MainWindow::performAutoScan()
 
             // Process image and perform triangulation
             processImageSet(before, after, referenceBefore, referenceAfter);
-            performTriangulation(deg_per_pic*((double) i), this->filtered, this->color_img, this->cloud, false);
-            save_picture(this->filtered, i, false, false, true, false);
+            performTriangulation(deg_per_pic*((double) i), local_filtered, this->color_img, this->cloud, false);
+            save_picture(local_filtered, i, false, false, true, false);
         }
+
+        updateImageToShow(local_filtered);
 
         // Increment the angle
         Q_EMIT setAngle(new_pos);
@@ -598,24 +602,29 @@ void MainWindow::updateFilteredImage(bool left, bool right)
     // Get an image with the lasers off
     cv::Mat before = getImage(0);
 
-    processImageSet(before, after, referenceBefore, referenceAfter);
+    cv::Mat local_filtered = processImageSet(before, after, referenceBefore, referenceAfter);
+    Q_EMIT updateImageToShow(local_filtered);
     wait_for_pic = false;
 }
 
 void MainWindow::updateView(int i)
 {
-    // If we have not yet reached the pointcloud stage we should show the image
-    if (!drawPointCloud && qnode.pictureHasBeenSet()) {
-        if (!wait_for_pic) {
-            QImage qImg = mat2qimage(this->filtered);
-            QPixmap pixMap = QPixmap::fromImage(qImg);
-
-            // Add the pixmap to the label that presents it
-            ui->imageLabel->setPixmap(pixMap);
+    // If there is not yet any image to process then we shouldn't try to
+    if (qnode.pictureHasBeenSet()) {
+        // If we have not yet reached the pointcloud stage we should show the image
+        if (!drawPointCloud && !wait_for_pic && !wait_for_image_to_show) {
             boost::thread* thr = new boost::thread(boost::bind(&MainWindow::updateFilteredImage, this,
                                                                ui->toggleUseLeftLaserCheckBox->isChecked(),
                                                                ui->toggleUseRightLaserCheckBox->isChecked()));
         }
+
+        if (!wait_for_image_to_show) {
+            QPixmap pixMap = QPixmap::fromImage(this->toShow);
+
+            // Add the pixmap to the label that presents it
+            ui->imageLabel->setPixmap(pixMap);
+        }
+
     }
 
     // If we have reached the pointcloud stage then we should not show the image
@@ -623,31 +632,43 @@ void MainWindow::updateView(int i)
         // If we have not set the point cloud viewer visible then we need to do that
         if (!pointCloudWidgetAdded) {
             spawnPointCloudWidget();
-            //boost::thread* thr = new boost::thread(boost::bind(&MainWindow::spawnPointCloudWidget, this));
         }
-
-        // If we have not added the pointcloud to the viewer then we should do that
-        if (cloud->empty())
-            return;
-        if (!viewer->updatePointCloud(this->cloud, "displayCloud")) {
-            viewer->addPointCloud(this->cloud, "displayCloud");
-            viewer->spinOnce();
-        } else {
-            viewer->spinOnce();
-        }
-        QImage qImg = mat2qimage(this->filtered);
-        QPixmap pixMap = QPixmap::fromImage(qImg);
-
-        // Add the pixmap to the label that presents it
-        ui->imageLabel->setPixmap(pixMap);
+        if (!wait_for_point_cloud_viewer)
+            Q_EMIT updatePointCloudViewer();
     }
+}
+
+void MainWindow::updateImageToShow(cv::Mat image)
+{
+    wait_for_image_to_show = true;
+
+    this->toShow = mat2qimage(image);
+
+    wait_for_image_to_show = false;
+}
+
+void MainWindow::updatePointCloudViewer()
+{
+    wait_for_point_cloud_viewer = true;
+
+    // If we have not added the pointcloud to the viewer then we should do that
+    if (cloud->empty())
+        return;
+    if (!pointCloudViewer->updatePointCloud(this->cloud, "displayCloud")) {
+        pointCloudViewer->addPointCloud(this->cloud, "displayCloud");
+        pointCloudViewer->spinOnce();
+    } else {
+        pointCloudViewer->spinOnce();
+    }
+
+    wait_for_point_cloud_viewer = false;
 }
 
 void MainWindow::spawnPointCloudWidget()
 {
     // Set up the point cloud viewer
     w = new QVTKWidget();
-    viewer.reset(new pcl::visualization::PCLVisualizer ("viewer", true));
+    pointCloudViewer.reset(new pcl::visualization::PCLVisualizer ("viewer", true));
     pointCloudWidgetAdded = true;
 }
 
