@@ -42,6 +42,7 @@ QNode::~QNode() {
 bool QNode::init() {
 
     pictureSet = false;
+    processing_pic = false;
     ros::init(init_argc,init_argv,"qt_package");
     if ( ! ros::master::check() ) {
         return false;
@@ -57,7 +58,7 @@ bool QNode::init() {
 }
 
 void QNode::run() {
-    ros::Rate loop_rate(20);
+    ros::Rate loop_rate(200);
     while (ros::ok()) {
         ros::spinOnce();
         loop_rate.sleep();
@@ -96,18 +97,30 @@ void QNode::subscribeToImage(QString topic)
 
 void QNode::imageCallback(const sensor_msgs::ImageConstPtr &image_msg)
 {
-    pictureSet = true;
-    //if (picLock.try_lock()) {
-        imagePtr = image_msg;
-        //picLock.unlock();
-        Q_EMIT updateView(0);
-    //}
-    wait_for_pic = false;
-}
+    dump_pic_counter++;
 
-bool QNode::pictureHasBeenSet()
-{
-    return pictureSet;
+    dump_pic_counter = dump_pic_counter % get_every_n_pics;
+
+    std::cout << "The counter is at " << dump_pic_counter << std::endl;
+
+    // We want to early return exept every n pics;
+    if (dump_pic_counter != 0)
+        return;
+
+    Q_EMIT updateView(0);
+
+    // XXX: This is not an ideal solution. We are signaling that a new image has arrived.
+    // We are then dropping the image on the floor and the application has to use call into
+    // this class to decide if it wants to acquire the image. If it does then it gets the next image.
+
+    // If we are processing the current picture then we do not want to store a new one
+    if (processing_pic)
+        return;
+
+    std::cout << "Setting the image pointer" << std::endl;
+    imagePtr = image_msg;
+
+    pictureSet = true;
 }
 
 void QNode::setAngle(double angle)
@@ -115,25 +128,32 @@ void QNode::setAngle(double angle)
     std_msgs::Int32 msg;
     //convert from 0-360 to 0-14000 here
     msg.data = angle*38.8888888;
+    wait_for_angle.store(true);
     anglepub.publish(msg);
+    while (current_angle < angle - 0.1 || current_angle > angle + 0.1)
+        std::cout << "Current angle is " << current_angle << "and wanted is " << angle << std::endl; // XXX: This is not good, there should be some infinite-loop-avoidance here
+    wait_for_angle.store(false);
 }
 
 void QNode::setLasers(int i)
 {
     std_msgs::Int32 msg;
     msg.data = i;
+    wait_for_laser.store(true);
     laserpub.publish(msg);
+    while (current_laser_val != i);
+    wait_for_laser.store(false);
 }
 
 void QNode::angleCallback(const std_msgs::Int32::ConstPtr &msg)
 {
-    double angle = msg->data*0.0257142857;
-    Q_EMIT sendCurrentAngle(angle);
+    current_angle = msg->data*0.0257142857;
+    Q_EMIT sendCurrentAngle(current_angle);
 }
 
 void QNode::laserCallback(const std_msgs::Int32::ConstPtr &msg)
 {
-    wait_for_laser = false;
+    current_laser_val = msg->data;
 }
 
 cv::Mat QNode::getCurrentImage()
@@ -142,41 +162,46 @@ cv::Mat QNode::getCurrentImage()
     //picLock.lock();
     cv_bridge::CvImagePtr cvImage;
 
+  //  wait_for_pic = true;
+
     if (pictureHasBeenSet()) {
+
+        processing_pic = true;
+
+//        while (wait_for_pic);
+
         // Convert ROS image message to opencv
         try {
             cvImage = cv_bridge::toCvCopy(imagePtr, "8UC3");
         } catch (cv_bridge::Exception& e) {
             std::cout << "Failed conversion of the image" << std::endl;
             ROS_ERROR("cv_bridge exception: %s", e.what());
-            return cvImage.get()->image;
+            //return cvImage.get()->image;
         }
+
+        processing_pic = false;
     } else {
         std::cout << "Trying to convert an image that doesnt exist" << std::endl;
     }
-
-    // Unlock the mutex so that we can get updated images
-    //picLock.unlock();
 
     return cvImage.get()->image;
 }
 
 
+// GETTER Methods
+bool QNode::pictureHasBeenSet()
+{
+    return pictureSet;
+}
 
-/* XXX: Not needed here, but instead in the method that uses this method
+bool QNode::waitingForAngle()
+{
+    return wait_for_angle;
+}
 
-QString afterUrl;
-QString beforeUrl;
-QString afterReferenceUrl;
-QString beforeReferenceUrl;
-
-afterUrl = url.left(-1);
-
-afterReferenceUrl = url.left(-1);
-
-beforeUrl = url.left(-1);
-
-beforeReferenceUrl = url.left(-1);
-*/
+bool QNode::waitingForLaser()
+{
+    return wait_for_laser;
+}
 
 }  // namespace LaserScannerApplication

@@ -580,9 +580,10 @@ void MainWindow::performAutoScan()
         Q_EMIT setAngle(new_pos);
 
         // Wait until table has turned into position
-        while (!(ui->current_position->value() < new_pos + 0.1 &&
-                 ui->current_position->value() > new_pos - 0.1)  ) {
-        }
+        while (qnode.waitingForAngle());
+        //while (!(ui->current_position->value() < new_pos + 0.1 &&
+        //         ui->current_position->value() > new_pos - 0.1)  ) {
+        //}
         i++;
     }
     ui->button_auto_scan->setEnabled(false);
@@ -602,16 +603,13 @@ void MainWindow::toggleFilter(bool filter)
 
 cv::Mat MainWindow::getImage(int lasers)
 {
-    if (!(ui->toggleLeftLaserCheckBox->isChecked() || ui->toggleRightLaserCheckBox)) {
+    if (!(ui->toggleLeftLaserCheckBox->isChecked() || ui->toggleRightLaserCheckBox->isChecked())) {
         // Take picture with laser
-        qnode.wait_for_laser = true;
         Q_EMIT setLasers(lasers);
-        while (qnode.wait_for_laser.load());
+        while (qnode.waitingForLaser());
+            //this->thread()->msleep(10000);
     }
 
-    // Wait until picture is updated
-    qnode.wait_for_pic = true;
-    while (qnode.wait_for_pic.load());
     return qnode.getCurrentImage();
 }
 
@@ -645,7 +643,7 @@ void MainWindow::updateView(int i)
 {
     // If we have not yet reached the pointcloud stage we should show the image
     if (!drawPointCloud && qnode.pictureHasBeenSet()) {
-        if (!wait_for_pic.load()) {
+        if (!wait_for_pic) {
             QImage qImg = mat2qimage(this->filtered);
             QPixmap pixMap = QPixmap::fromImage(qImg);
 
