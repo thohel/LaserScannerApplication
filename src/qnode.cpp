@@ -122,7 +122,6 @@ void QNode::imageCallback(const sensor_msgs::ImageConstPtr &image_msg)
 
     wait_for_pic = false;
     pictureSet = true;
-    std::cout << "New image pointer set in QNode" << std::endl;
 }
 
 void QNode::setAngle(double angle)
@@ -159,9 +158,6 @@ void QNode::laserCallback(const std_msgs::Int32::ConstPtr &msg)
 
 cv::Mat QNode::getCurrentImage()
 {
-    std::cout << "Running getCurrentImage in QNode" << std::endl;
-
-    // Lock the mutex so that we can avoid queing up images
     cv_bridge::CvImagePtr cvImage;
 
     if (pictureHasBeenSet()) {
@@ -190,9 +186,9 @@ cv::Mat QNode::getCurrentImage()
     }
 
     wait_for_pic = true;
+
     return cvImage.get()->image;
 }
-
 
 // GETTER Methods
 bool QNode::pictureHasBeenSet()

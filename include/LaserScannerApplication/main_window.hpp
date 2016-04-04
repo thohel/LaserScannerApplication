@@ -18,7 +18,6 @@
 #include <pcl/visualization/pcl_visualizer.h>
 #include <vtkRenderWindow.h>
 #include <QVTKWidget.h>
-#include <boost/atomic.hpp>
 
 /*****************************************************************************
 ** Namespace
@@ -90,7 +89,6 @@ private:
     void updateFilteredImage(bool left, bool right);
     void updateImageToShow(cv::Mat image);
     bool isImagePipelineReady();
-    //boost::atomic<QImage> toShow;
     QImage toShow;
 };
 

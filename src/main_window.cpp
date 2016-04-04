@@ -137,8 +137,7 @@ void MainWindow::on_button_refresh_topic_clicked(bool check)
 void MainWindow::on_button_subscribe_topic_clicked(bool check)
 {
     if (ui->comboBox->currentText().length() != 0) {
-        // if (ui->comboBox->currentText().contains("image_color"))
-            Q_EMIT subscribeToImage(ui->comboBox->currentText());
+        Q_EMIT subscribeToImage(ui->comboBox->currentText());
     }
 }
 
@@ -170,8 +169,6 @@ cv::Mat MainWindow::processImageSet(cv::Mat before, cv::Mat after, cv::Mat refer
     cv::Mat final = after;
     cv::Mat temp;
     cv::Mat backup = after;
-
-    std::cout << "Width of images " << before.cols << " " << after.cols << " " << referenceBefore.cols << " " << referenceAfter.cols << std::endl;
 
     if (ui->crossHairCheckBox->isChecked()) {
         cv::Point2i leftMid;
@@ -320,13 +317,13 @@ void MainWindow::performTriangulation(double amountRotated, cv::Mat img, cv::Mat
     // These values are not perfect, but the variance between cameras is good enough for now
     // Assumes hd resolution is used
     double cam_focal_distance_pixels = 1081.37;
-//    double cam_focal_distance_mm = 3.291;
-//    double cam_cx = 959.5;
-//    double cam_cy = 539.5;
+    //double cam_focal_distance_mm = 3.291;
+    //double cam_cx = 959.5;
+    //double cam_cy = 539.5;
 
-//    double cam_fov_hor = 84.1; // Degrees
-//    double cam_fov_vert = 53.8;
-//    double cam_tilt_angle = 0.0; // Degrees
+    //double cam_fov_hor = 84.1; // Degrees
+    //double cam_fov_vert = 53.8;
+    //double cam_tilt_angle = 0.0; // Degrees
     double cam_center_dist = 300.0; // mm
     double laser_cam_dist = cam_center_dist*tan(laser_angle*degreesToRadians);
     double laser_center_dist = cam_center_dist / cos(laser_angle*degreesToRadians);
@@ -430,6 +427,7 @@ void MainWindow::performTriangulation(double amountRotated, cv::Mat img, cv::Mat
 
             cloud->push_back(*point);
         }
+
         double averageRad = radSum/radCounter;
         std::cout << "Radius is: " << averageRad << std::endl;
         radSum = 0.0;
@@ -437,7 +435,6 @@ void MainWindow::performTriangulation(double amountRotated, cv::Mat img, cv::Mat
 
         if (!wait_for_point_cloud_viewer)
             Q_EMIT updatePointCloudViewer();
-
     }
 }
 
@@ -506,7 +503,7 @@ void MainWindow::on_button_auto_scan_clicked(bool check)
 
 void MainWindow::performAutoScan()
 {
-    // XXX: Deactivate filter controls ++
+    // XXX: Deactivate filter controls
 
 
     // We have not set the point cloud viewer visible, we need to do that
@@ -586,32 +583,23 @@ void MainWindow::toggleFilter(bool filter)
 cv::Mat MainWindow::getImage(int lasers)
 {
     if (!(ui->toggleLeftLaserCheckBox->isChecked() || ui->toggleRightLaserCheckBox->isChecked())) {
-        std::cout << "we are in get image laser area" << std::endl;
-
         // Take picture with laser
         Q_EMIT setLasers(lasers);
         while (qnode.waitingForLaser());
             //this->thread()->msleep(10000);
     }
 
-    std::cout << "we are in the end of image" << std::endl;
-
     return qnode.getCurrentImage();
 }
 
 void MainWindow::updateFilteredImage(bool left, bool right)
 {
-    std::cout << "we are in the beginning of update filtered image" << std::endl;
-
     wait_for_processing_pic = true;
 
     cv::Mat after;
-    std::cout << "we are further down in filtered image" << std::endl;
 
     // Get an image with the lasers off
     cv::Mat before = getImage(0);
-
-    std::cout << "we got the first image in update filtered image" << std::endl;
 
     if (ui->mainCheckBox->isChecked()) {
         if (left && right) {
@@ -646,8 +634,6 @@ void MainWindow::updateView(int i)
 {
     // If there is not yet any image to process then we shouldn't try to
     if (qnode.pictureHasBeenSet()) {
-        std::cout << "Looping in update view with set picture" << std::endl;
-
         // If we have not yet reached the pointcloud stage we should show the image
         if (!drawPointCloud && isImagePipelineReady()) {
 
@@ -655,7 +641,6 @@ void MainWindow::updateView(int i)
             boost::thread* thr = new boost::thread(boost::bind(&MainWindow::updateFilteredImage, this,
                                                                ui->toggleUseLeftLaserCheckBox->isChecked(),
                                                                ui->toggleUseRightLaserCheckBox->isChecked()));
-            std::cout << "Spawned update image thread" << std::endl;
         }
 
         if (new_pic_to_present) {
@@ -664,14 +649,11 @@ void MainWindow::updateView(int i)
             // Add the pixmap to the label that presents it
             ui->imageLabel->setPixmap(pixMap);
             new_pic_to_present = false;
-
-            std::cout << "Present that shit!" << std::endl;
         }
 
         if (new_mat_to_convert) {
             boost::thread* thr = new boost::thread(boost::bind(&MainWindow::updateImageToShow, this,
                                                                this->matToShow));
-            std::cout << "Spawned convert mat thread" << std::endl;
         }
     }
 }
@@ -688,8 +670,10 @@ void MainWindow::updatePointCloudViewer()
     wait_for_point_cloud_viewer = true;
 
     // If we have not added the pointcloud to the viewer then we should do that
-    if (this->cloud->empty())
+    if (this->cloud->empty()) {
+        wait_for_point_cloud_viewer = false;
         return;
+    }
 
     if (!pointCloudViewer->updatePointCloud(this->cloud, "displayCloud")) {
         pointCloudViewer->addPointCloud(this->cloud, "displayCloud");
