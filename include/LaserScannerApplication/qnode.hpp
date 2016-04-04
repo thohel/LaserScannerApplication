@@ -95,6 +95,7 @@ private:
     boost::atomic_bool processing_pic;
     static const int get_every_n_pics = 3;
     int dump_pic_counter;
+    bool flip_colours;
 
 };
 

@@ -43,6 +43,7 @@ bool QNode::init() {
 
     pictureSet = false;
     processing_pic = false;
+    flip_colours = false;
     ros::init(init_argc,init_argv,"qt_package");
     if ( ! ros::master::check() ) {
         return false;
@@ -93,6 +94,8 @@ void QNode::subscribeToImage(QString topic)
     ros::NodeHandle n;
     const char *tmp = topic.toUtf8().constData();
     imageSub = n.subscribe<sensor_msgs::Image, QNode>(tmp, 1, &QNode::imageCallback, this);
+    if (topic.contains("usb_cam"))
+        flip_colours = true;
 }
 
 void QNode::imageCallback(const sensor_msgs::ImageConstPtr &image_msg)
@@ -119,6 +122,7 @@ void QNode::imageCallback(const sensor_msgs::ImageConstPtr &image_msg)
 
     wait_for_pic = false;
     pictureSet = true;
+    std::cout << "New image pointer set in QNode" << std::endl;
 }
 
 void QNode::setAngle(double angle)
@@ -155,6 +159,8 @@ void QNode::laserCallback(const std_msgs::Int32::ConstPtr &msg)
 
 cv::Mat QNode::getCurrentImage()
 {
+    std::cout << "Running getCurrentImage in QNode" << std::endl;
+
     // Lock the mutex so that we can avoid queing up images
     cv_bridge::CvImagePtr cvImage;
 
@@ -167,7 +173,11 @@ cv::Mat QNode::getCurrentImage()
 
         // Convert ROS image message to opencv
         try {
-            cvImage = cv_bridge::toCvCopy(imagePtr, "8UC3");
+            if (flip_colours) {
+                cvImage = cv_bridge::toCvCopy(imagePtr, "bgr8");
+            } else {
+                cvImage = cv_bridge::toCvCopy(imagePtr, "8UC3");
+            }
         } catch (cv_bridge::Exception& e) {
             std::cout << "Failed conversion of the image" << std::endl;
             ROS_ERROR("cv_bridge exception: %s", e.what());

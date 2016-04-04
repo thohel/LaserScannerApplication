@@ -108,6 +108,10 @@ MainWindow::MainWindow(int argc, char** argv, QWidget *parent)
     ui->textbox_path->setText("/home/minions");
     ui->saveCheckBox->setEnabled(false);
 
+    wait_for_processing_pic = false;
+    new_pic_to_present = false;
+    new_mat_to_convert = false;
+
     // Init ROS
     qnode.init();
 }
@@ -133,7 +137,7 @@ void MainWindow::on_button_refresh_topic_clicked(bool check)
 void MainWindow::on_button_subscribe_topic_clicked(bool check)
 {
     if (ui->comboBox->currentText().length() != 0) {
-        if (ui->comboBox->currentText().contains("image_color"))
+        // if (ui->comboBox->currentText().contains("image_color"))
             Q_EMIT subscribeToImage(ui->comboBox->currentText());
     }
 }
@@ -166,6 +170,8 @@ cv::Mat MainWindow::processImageSet(cv::Mat before, cv::Mat after, cv::Mat refer
     cv::Mat final = after;
     cv::Mat temp;
     cv::Mat backup = after;
+
+    std::cout << "Width of images " << before.cols << " " << after.cols << " " << referenceBefore.cols << " " << referenceAfter.cols << std::endl;
 
     if (ui->crossHairCheckBox->isChecked()) {
         cv::Point2i leftMid;
@@ -299,7 +305,6 @@ cv::Mat MainWindow::processImageSet(cv::Mat before, cv::Mat after, cv::Mat refer
     }
 
     return final;
-//    this->color_img = before;
 }
 
 void MainWindow::performTriangulation(double amountRotated, cv::Mat img, cv::Mat color_img, pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, bool leftSide)
@@ -534,7 +539,7 @@ void MainWindow::performAutoScan()
 
             // Process image and perform triangulation
             local_filtered = processImageSet(before, after, referenceBefore, referenceAfter);
-            performTriangulation(deg_per_pic*((double) i), local_filtered, this->color_img, this->cloud, true);
+            performTriangulation(deg_per_pic*((double) i), local_filtered, before, this->cloud, true);
             save_picture(local_filtered, i, false, false, true, true);
         }
 
@@ -544,21 +549,23 @@ void MainWindow::performAutoScan()
             save_picture(after, i, true, false, false, false);
 
             // Process image and perform triangulation
-            processImageSet(before, after, referenceBefore, referenceAfter);
-            performTriangulation(deg_per_pic*((double) i), local_filtered, this->color_img, this->cloud, false);
+            local_filtered = processImageSet(before, after, referenceBefore, referenceAfter);
+            performTriangulation(deg_per_pic*((double) i), local_filtered, before, this->cloud, false);
             save_picture(local_filtered, i, false, false, true, false);
         }
 
-        //updateImageToShow(local_filtered);
+        if (isImagePipelineReady()) {
+            matToShow = local_filtered.clone();
+            new_mat_to_convert = true;
+        }
+
 
         // Increment the angle
         Q_EMIT setAngle(new_pos);
 
         // Wait until table has turned into position
         while (qnode.waitingForAngle());
-        //while (!(ui->current_position->value() < new_pos + 0.1 &&
-        //         ui->current_position->value() > new_pos - 0.1)  ) {
-        //}
+
         i++;
     }
     ui->button_auto_scan->setEnabled(false);
@@ -579,71 +586,101 @@ void MainWindow::toggleFilter(bool filter)
 cv::Mat MainWindow::getImage(int lasers)
 {
     if (!(ui->toggleLeftLaserCheckBox->isChecked() || ui->toggleRightLaserCheckBox->isChecked())) {
+        std::cout << "we are in get image laser area" << std::endl;
+
         // Take picture with laser
         Q_EMIT setLasers(lasers);
         while (qnode.waitingForLaser());
             //this->thread()->msleep(10000);
     }
 
+    std::cout << "we are in the end of image" << std::endl;
+
     return qnode.getCurrentImage();
 }
 
 void MainWindow::updateFilteredImage(bool left, bool right)
 {
-    wait_for_pic = true;
-    cv::Mat after;
+    std::cout << "we are in the beginning of update filtered image" << std::endl;
 
-    if (left && right) {
-        // Get an image with both lasers on
-        after = getImage(3);
-    } else if (left) {
-        // Get an image with left laser on
-        after = getImage(1);
-    } else if (right) {
-        // Get an image with right laser on
-        after = getImage(2);
-    } else {
-        // Get an image with the lasers off
-        after = getImage(0);
-    }
+    wait_for_processing_pic = true;
+
+    cv::Mat after;
+    std::cout << "we are further down in filtered image" << std::endl;
 
     // Get an image with the lasers off
     cv::Mat before = getImage(0);
 
-    cv::Mat local_filtered = processImageSet(before, after, referenceBefore, referenceAfter);
-    // Q_EMIT updateImageToShow(local_filtered);
-    this->toShow = mat2qimage(local_filtered);
-    wait_for_pic = false;
+    std::cout << "we got the first image in update filtered image" << std::endl;
+
+    if (ui->mainCheckBox->isChecked()) {
+        if (left && right) {
+            // Get an image with both lasers on
+            after = getImage(3);
+        } else if (left) {
+            // Get an image with left laser on
+            after = getImage(1);
+        } else if (right) {
+            // Get an image with right laser on
+            after = getImage(2);
+        } else {
+            // Get an image with the lasers off
+            after = getImage(0);
+        }
+        matToShow = processImageSet(before, after, referenceBefore, referenceAfter).clone();
+    } else {
+        matToShow = before.clone();
+    }
+
+    new_mat_to_convert = true;
+
+    wait_for_processing_pic = false;
+}
+
+bool MainWindow::isImagePipelineReady()
+{
+    return !wait_for_processing_pic && !new_pic_to_present && !new_mat_to_convert;
 }
 
 void MainWindow::updateView(int i)
 {
     // If there is not yet any image to process then we shouldn't try to
     if (qnode.pictureHasBeenSet()) {
+        std::cout << "Looping in update view with set picture" << std::endl;
+
         // If we have not yet reached the pointcloud stage we should show the image
-        if (!drawPointCloud && !wait_for_pic && !wait_for_image_to_show) {
+        if (!drawPointCloud && isImagePipelineReady()) {
+
+            wait_for_processing_pic = true; // Need to set this before launching the thread, or else we will fall through on the next if
             boost::thread* thr = new boost::thread(boost::bind(&MainWindow::updateFilteredImage, this,
                                                                ui->toggleUseLeftLaserCheckBox->isChecked(),
                                                                ui->toggleUseRightLaserCheckBox->isChecked()));
+            std::cout << "Spawned update image thread" << std::endl;
         }
 
-        if (!wait_for_image_to_show && !wait_for_pic) {
-            QPixmap pixMap = QPixmap::fromImage(this->toShow);
+        if (new_pic_to_present) {
+            QPixmap pixMap = QPixmap::fromImage(toShow);
 
             // Add the pixmap to the label that presents it
             ui->imageLabel->setPixmap(pixMap);
+            new_pic_to_present = false;
+
+            std::cout << "Present that shit!" << std::endl;
         }
 
+        if (new_mat_to_convert) {
+            boost::thread* thr = new boost::thread(boost::bind(&MainWindow::updateImageToShow, this,
+                                                               this->matToShow));
+            std::cout << "Spawned convert mat thread" << std::endl;
+        }
     }
 }
 
 void MainWindow::updateImageToShow(cv::Mat image)
 {
-    wait_for_image_to_show = true;
-
-    this->toShow = mat2qimage(image);
-
-    wait_for_image_to_show = false;
+    toShow = mat2qimage(image);
+    new_mat_to_convert = false;
+    new_pic_to_present = true;
 }
 
 void MainWindow::updatePointCloudViewer()
