@@ -216,22 +216,19 @@ cv::Mat MainWindow::processImageSet(cv::Mat before, cv::Mat after, cv::Mat refer
         final = temp;
     }
 
-    if (ui->cropingCheckBox->isChecked()) {
+    cv::Rect roi;
+    if (ui->cropingCheckBox->isChecked() || ui->cropingVisualizeCheckBox->isChecked()) {
         // Define a box that is our Region of Interest
-        cv::Rect roi;
         roi.x = ui->xposSlider->value();
         roi.y = ui->yposSlider->value();
-        roi.width = ui->widthSlider->value();
-        roi.height = ui->heightSlider->value();
+        roi.width = (roi.x + ui->widthSlider->value() > final.cols) ? final.cols - roi.x : ui->widthSlider->value();
+        roi.height = (roi.y + ui->heightSlider->value() > final.rows) ? final.rows - roi.y : ui->heightSlider->value();
+    }
+
+    if (ui->cropingCheckBox->isChecked()) {
         temp = final(roi);
         final = temp;
     } else if (ui->cropingVisualizeCheckBox->isChecked()) { // XXX: Should not be added to image when we start 3D capture
-        // Define a box that is our Region of Interest
-        cv::Rect roi;
-        roi.x = ui->xposSlider->value();
-        roi.y = ui->yposSlider->value();
-        roi.width = ui->widthSlider->value();
-        roi.height = ui->heightSlider->value();
         cv::rectangle(final, roi, cv::Scalar(0, 255, 0));
     }
 
@@ -285,12 +282,6 @@ cv::Mat MainWindow::processImageSet(cv::Mat before, cv::Mat after, cv::Mat refer
     }
 
     if (ui->cropingCheckBox->isChecked()) {
-        // Define a box that is our Region of Interest
-        cv::Rect roi;
-        roi.x = ui->xposSlider->value();
-        roi.y = ui->yposSlider->value();
-        roi.width = ui->widthSlider->value();
-        roi.height = ui->heightSlider->value();
         final.copyTo(backup(roi));
         final = backup;
     }
@@ -333,6 +324,11 @@ void MainWindow::performTriangulation(double amountRotated, cv::Mat img, cv::Mat
     int endY = ui->heightSlider->value() == 0 ? cam_res_vert : ui->yposSlider->value() + ui->heightSlider->value();
     int startX = ui->xposSlider->value();
     int endX = ui->widthSlider->value() == 0 ? cam_res_hor : ui->xposSlider->value() + ui->widthSlider->value();
+
+    // Safeguard against trying to acces stuff outside the image
+    endY = (endY > img.rows) ? img.rows : endY;
+    endX = (endX > img.cols) ? img.cols : endX;
+
     int radCounter = 0;
     double radSum = 0.0;
 
@@ -561,7 +557,7 @@ void MainWindow::performAutoScan()
         Q_EMIT setAngle(new_pos);
 
         // Wait until table has turned into position
-        while (qnode.waitingForAngle());
+        // while (qnode.waitingForAngle());
 
         i++;
     }
