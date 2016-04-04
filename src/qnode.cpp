@@ -44,6 +44,10 @@ bool QNode::init() {
     pictureSet = false;
     processing_pic = false;
     flip_colours = false;
+    wait_for_laser = false;
+    wait_for_angle = false;
+    wait_for_pic = false;
+
     ros::init(init_argc,init_argv,"qt_package");
     if ( ! ros::master::check() ) {
         return false;
@@ -165,6 +169,15 @@ cv::Mat QNode::getCurrentImage()
         // If we have already acquired this image then we want to wait for a new one
         while (wait_for_pic);
 
+        // We don't want to grab a picture while the turntable is moving
+        while (waitingForAngle());
+
+        // We don't want to grab a picture while we are waiting for the lasers to activate
+        while (waitingForLaser());
+
+        // We don't want to grab a picture while we are still processing the old one
+        while (waitingForPicProcessing())
+
         processing_pic = true;
 
         // Convert ROS image message to opencv
@@ -204,6 +217,16 @@ bool QNode::waitingForAngle()
 bool QNode::waitingForLaser()
 {
     return wait_for_laser;
+}
+
+bool QNode::waitingForPic()
+{
+    return wait_for_pic;
+}
+
+bool QNode::waitingForPicProcessing()
+{
+    return processing_pic;
 }
 
 }  // namespace LaserScannerApplication

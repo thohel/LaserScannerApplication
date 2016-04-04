@@ -57,6 +57,8 @@ public:
     bool pictureHasBeenSet();
     bool waitingForLaser();
     bool waitingForAngle();
+    bool waitingForPic();
+    bool waitingForPicProcessing();
 
 Q_SIGNALS:
     void loggingUpdated();
@@ -93,7 +95,7 @@ private:
     boost::atomic_bool wait_for_angle;
     boost::atomic_bool wait_for_pic;
     boost::atomic_bool processing_pic;
-    static const int get_every_n_pics = 3;
+    static const int get_every_n_pics = 6;
     int dump_pic_counter;
     bool flip_colours;
 

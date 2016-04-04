@@ -432,9 +432,6 @@ void MainWindow::performTriangulation(double amountRotated, cv::Mat img, cv::Mat
         std::cout << "Radius is: " << averageRad << std::endl;
         radSum = 0.0;
         radCounter = 0;
-
-        if (!wait_for_point_cloud_viewer)
-            Q_EMIT updatePointCloudViewer();
     }
 }
 
@@ -556,6 +553,9 @@ void MainWindow::performAutoScan()
             new_mat_to_convert = true;
         }
 
+        // Update the point-cloud-viewer with the newly scanned strips
+        if (!wait_for_point_cloud_viewer)
+            Q_EMIT updatePointCloudViewer();
 
         // Increment the angle
         Q_EMIT setAngle(new_pos);
@@ -582,11 +582,11 @@ void MainWindow::toggleFilter(bool filter)
 
 cv::Mat MainWindow::getImage(int lasers)
 {
+    while (qnode.waitingForAngle() || qnode.waitingForLaser() || qnode.waitingForPic() || qnode.waitingForPicProcessing());
+
     if (!(ui->toggleLeftLaserCheckBox->isChecked() || ui->toggleRightLaserCheckBox->isChecked())) {
         // Take picture with laser
-        Q_EMIT setLasers(lasers);
-        while (qnode.waitingForLaser());
-            //this->thread()->msleep(10000);
+        qnode.setLasers(lasers);
     }
 
     return qnode.getCurrentImage();
