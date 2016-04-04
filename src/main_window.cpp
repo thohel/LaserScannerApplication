@@ -565,6 +565,10 @@ void MainWindow::performAutoScan()
 
         i++;
     }
+
+    // We need to do a simple spin() of the point cloud viewer to not block it when it is done
+    pointCloudViewer->spin();
+
     ui->button_auto_scan->setEnabled(false);
 
     // Save the point cloud to a pcd file
