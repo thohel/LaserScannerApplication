@@ -191,16 +191,16 @@ cv::Mat MainWindow::processImageSet(cv::Mat before, cv::Mat after, cv::Mat refer
     // We now know the size of the image, so we can adjust our sliders accordingly
     if (!ui->xposSlider->isEnabled()) {
         ui->xposSlider->setMinimum(0);
-        ui->xposSlider->setMaximum(final.rows);
+        ui->xposSlider->setMaximum(final.cols);
         ui->xposSlider->setEnabled(true);
         ui->heightSlider->setMinimum(0);
-        ui->heightSlider->setMaximum(final.rows);
+        ui->heightSlider->setMaximum(final.cols);
         ui->heightSlider->setEnabled(true);
         ui->yposSlider->setMinimum(0);
-        ui->yposSlider->setMaximum(final.cols);
+        ui->yposSlider->setMaximum(final.rows);
         ui->yposSlider->setEnabled(true);
         ui->widthSlider->setMinimum(0);
-        ui->widthSlider->setMaximum(final.cols);
+        ui->widthSlider->setMaximum(final.rows);
         ui->widthSlider->setEnabled(true);
     }
 
