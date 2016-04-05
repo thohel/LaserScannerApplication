@@ -286,7 +286,7 @@ cv::Mat MainWindow::processImageSet(cv::Mat before, cv::Mat after, cv::Mat refer
         final = backup;
     }
 
-    if (ui->checkBox->isChecked() && ui->mainCheckBox->isChecked()) {
+    if (ui->checkBox->isChecked() && ui->mainCheckBox->isChecked() && !ui->brightnessCheckBox->isChecked()) {
         cv::inRange(final, cv::Scalar(ui->blueSliderMin->value(), ui->greenSliderMin->value(), ui->redSliderMin->value()),
                          cv::Scalar(ui->blueSliderMax->value(), ui->greenSliderMax->value(), ui->redSliderMax->value()), temp);
         final = temp;
@@ -319,15 +319,29 @@ void MainWindow::performTriangulation(double amountRotated, cv::Mat img, cv::Mat
     double laser_cam_dist = cam_center_dist*tan(laser_angle*degreesToRadians);
     double laser_center_dist = cam_center_dist / cos(laser_angle*degreesToRadians);
 
+    int startY;
+    int endY;
+    int startX;
+    int endX;
+
     // If a area of intereset has been set then we should take that into account
-    int startY = ui->yposSlider->value();
-    int endY = ui->heightSlider->value() == 0 ? cam_res_vert : ui->yposSlider->value() + ui->heightSlider->value();
-    int startX = ui->xposSlider->value();
-    int endX = ui->widthSlider->value() == 0 ? cam_res_hor : ui->xposSlider->value() + ui->widthSlider->value();
+    if (ui->cropingCheckBox->isChecked()) {
+        startY = ui->yposSlider->value();
+        startX = ui->xposSlider->value();
+        endY = ui->heightSlider->value() == 0 ? cam_res_vert : ui->yposSlider->value() + ui->heightSlider->value();
+        endX = ui->widthSlider->value() == 0 ? cam_res_hor : ui->xposSlider->value() + ui->widthSlider->value();
+    } else {
+        startY = 0;
+        startX = 0;
+        endY = img.rows;
+        endX = img.cols;
+    }
 
     // Safeguard against trying to acces stuff outside the image
     endY = (endY > img.rows) ? img.rows : endY;
     endX = (endX > img.cols) ? img.cols : endX;
+
+    std::cout << "Getting image between " << startY << ", " << startX << " and " << endY << ", " << endX << std::endl;
 
     int radCounter = 0;
     double radSum = 0.0;
@@ -337,24 +351,50 @@ void MainWindow::performTriangulation(double amountRotated, cv::Mat img, cv::Mat
         bool found_first_x = false;
         int first_x = -1;
         int last_x = -1;
+        int brightestX = 0;
 
         for (int x = startX; x < endX; x++) {
-            cv::Scalar intensity = img.at<uchar>(y, x);
-            if (intensity.val[0] > 200) {
-                if (!found_first_x) {
-                    found_first_x = true;
-                    first_x = x;
-                } else {
-                    last_x = x;
+            //cv::Scalar intensity = img.at<uchar>(y, x);
+            cv::Vec3b intensity = img.at<cv::Vec3b>(y, x);
+
+            uchar blue = intensity.val[0];
+            uchar green = intensity.val[1];
+            uchar red = intensity.val[2];
+
+            if (ui->brightnessCheckBox->isChecked()) {
+
+                // XXX: This is a hacked up weighting algorithm, giving more weight to blue, and less to red
+                int sum = blue*3 + green*0.5 + red*0.5;
+
+                if (sum > 70 && sum > brightestX) {
+//                    std::cout << "  Pixel at " << y << ", " << x << " is " << sum << std::endl;
+                    brightestX = x;
                 }
-            } else if (found_first_x) {
-                // End of continuous segment of the line. Just break out of the loop and calculate the point.
-                break;
+            } else {
+                if (intensity.val[0] > 200) {
+                    if (!found_first_x) {
+                        found_first_x = true;
+                        first_x = x;
+                    } else {
+                        last_x = x;
+                    }
+                } else if (found_first_x) {
+                    // End of continuous segment of the line. Just break out of the loop and calculate the point.
+                    break;
+                }
             }
         }
 
+        // If we are using brightness values, we want to continue with the next row if we did not find a decently large value
+        if (ui->brightnessCheckBox->isChecked() && brightestX == 0) {
+            continue;
+        } else {
+            // XXX: This is a slight hack, but whatevvas!
+            found_first_x = true;
+        }
+
         if (found_first_x) {
-            double average_x = double (first_x + last_x)/2;
+            double average_x = ui->brightnessCheckBox->isChecked() ? (double) brightestX : double (first_x + last_x)/2;
 
             double pixel_angle_x;
             if (leftSide) {

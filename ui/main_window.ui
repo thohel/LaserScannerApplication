@@ -478,7 +478,7 @@
         </rect>
        </property>
        <property name="currentIndex">
-        <number>8</number>
+        <number>1</number>
        </property>
        <widget class="QWidget" name="crossHairPage">
         <property name="geometry">
@@ -870,6 +870,19 @@
          </property>
          <property name="text">
           <string>Min</string>
+         </property>
+        </widget>
+        <widget class="QCheckBox" name="brightnessCheckBox">
+         <property name="geometry">
+          <rect>
+           <x>190</x>
+           <y>0</y>
+           <width>131</width>
+           <height>22</height>
+          </rect>
+         </property>
+         <property name="text">
+          <string>Brightest value</string>
          </property>
         </widget>
        </widget>
@@ -1482,6 +1495,14 @@
         </widget>
        </widget>
        <widget class="QWidget" name="laserPage">
+        <property name="geometry">
+         <rect>
+          <x>0</x>
+          <y>0</y>
+          <width>381</width>
+          <height>372</height>
+         </rect>
+        </property>
         <attribute name="label">
          <string>Laser Selection / Override</string>
         </attribute>
