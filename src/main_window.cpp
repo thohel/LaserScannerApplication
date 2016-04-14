@@ -438,6 +438,11 @@ void MainWindow::performTriangulation(double amountRotated, cv::Mat img, cv::Mat
         //double cam_tilt_angle = 0.0; // Degrees
     }
 
+    // If we have upsampled then we will need to double the focal distance
+    if (ui->upsampleCheckBox->isChecked()) {
+        cam_focal_distance_pixels *= 2;
+    }
+
     double laser_angle = ui->degreeLaserAngle->value();
 
     double cam_center_dist = 300.0; // mm
