@@ -18,8 +18,15 @@ include_directories(${catkin_INCLUDE_DIRS})
 
 set(ENV{OpenCV_DIR} /usr/local/share/OpenCV)
 
+set(BOOST_ROOT /home/minions/Workspaces/boost1.60/)
+
+#set(Boost_USE_STATIC_LIBS OFF)
+#set(Boost_USE_MULTITHREADED ON)
+#set(Boost_USE_STATIC_RUNTIME OFF)
+find_package(Boost 1.60.0 COMPONENTS atomic )
+
 find_package( OpenCV REQUIRED )
-include_directories( ${OpenCV_DIR})
+include_directories(${OpenCV_DIR} ${Boost_INCLUDE_DIRS})
 
 find_package(VTK REQUIRED)
 FIND_PACKAGE(VTK)
@@ -61,5 +68,5 @@ file(GLOB_RECURSE QT_SOURCES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} FOLLOW_SYMLINK
 ##############################################################################
 
 add_executable(LaserScannerApplication ${QT_SOURCES} ${QT_RESOURCES_CPP} ${QT_FORMS_HPP} ${QT_MOC_HPP})
-target_link_libraries(LaserScannerApplication ${QT_LIBRARIES} ${catkin_LIBRARIES} ${VTK_LIBRARIES} ${OPENCV_LIBRARIES})
+target_link_libraries(LaserScannerApplication ${QT_LIBRARIES} ${catkin_LIBRARIES} ${VTK_LIBRARIES} ${OPENCV_LIBRARIES} ${Boost_LIBRARIES})
 install(TARGETS LaserScannerApplication RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
