@@ -356,6 +356,19 @@
          <string>Current position:</string>
         </property>
        </widget>
+       <widget class="QPushButton" name="button_cont_scan">
+        <property name="geometry">
+         <rect>
+          <x>200</x>
+          <y>90</y>
+          <width>100</width>
+          <height>35</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>ContScan</string>
+        </property>
+       </widget>
       </widget>
       <widget class="QFrame" name="frame_2">
        <property name="geometry">
@@ -439,7 +452,7 @@
        <widget class="QLabel" name="label_4">
         <property name="geometry">
          <rect>
-          <x>180</x>
+          <x>10</x>
           <y>0</y>
           <width>161</width>
           <height>35</height>
@@ -454,13 +467,26 @@
          <string>TOPIC SELECTOR</string>
         </property>
        </widget>
+       <widget class="QCheckBox" name="opencvCheckBox">
+        <property name="geometry">
+         <rect>
+          <x>180</x>
+          <y>0</y>
+          <width>281</width>
+          <height>31</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Use OpenCV's grabbing functionality</string>
+        </property>
+       </widget>
       </widget>
       <widget class="QCheckBox" name="mainCheckBox">
        <property name="geometry">
         <rect>
          <x>1270</x>
          <y>150</y>
-         <width>321</width>
+         <width>161</width>
          <height>22</height>
         </rect>
        </property>
@@ -478,7 +504,7 @@
         </rect>
        </property>
        <property name="currentIndex">
-        <number>1</number>
+        <number>2</number>
        </property>
        <widget class="QWidget" name="crossHairPage">
         <property name="geometry">
@@ -1666,6 +1692,84 @@
          <string>Set Reference Images</string>
         </property>
        </widget>
+       <widget class="QFrame" name="frame_7">
+        <property name="geometry">
+         <rect>
+          <x>0</x>
+          <y>0</y>
+          <width>211</width>
+          <height>131</height>
+         </rect>
+        </property>
+        <property name="frameShape">
+         <enum>QFrame::StyledPanel</enum>
+        </property>
+        <property name="frameShadow">
+         <enum>QFrame::Raised</enum>
+        </property>
+        <widget class="QLabel" name="label_28">
+         <property name="geometry">
+          <rect>
+           <x>10</x>
+           <y>0</y>
+           <width>191</width>
+           <height>41</height>
+          </rect>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>16</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string> REFERENCE IMAGE</string>
+         </property>
+        </widget>
+        <widget class="QCheckBox" name="refImageCheckBox_2">
+         <property name="geometry">
+          <rect>
+           <x>20</x>
+           <y>40</y>
+           <width>181</width>
+           <height>31</height>
+          </rect>
+         </property>
+         <property name="text">
+          <string>Use reference images</string>
+         </property>
+        </widget>
+        <widget class="QPushButton" name="button_set_ref_images_2">
+         <property name="geometry">
+          <rect>
+           <x>20</x>
+           <y>80</y>
+           <width>171</width>
+           <height>35</height>
+          </rect>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>11</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>Set Reference Images</string>
+         </property>
+        </widget>
+       </widget>
+      </widget>
+      <widget class="QCheckBox" name="upsampleCheckBox">
+       <property name="geometry">
+        <rect>
+         <x>1450</x>
+         <y>150</y>
+         <width>171</width>
+         <height>22</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Activate upsampling</string>
+       </property>
       </widget>
      </widget>
     </item>

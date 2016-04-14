@@ -8,26 +8,18 @@
 #ifndef LaserScannerApplication_MAIN_WINDOW_H
 #define LaserScannerApplication_MAIN_WINDOW_H
 
-/*****************************************************************************
-** Includes
-*****************************************************************************/
-
 #include <QtGui/QMainWindow>
 #include "ui_main_window.h"
 #include "qnode.hpp"
 #include <pcl/visualization/pcl_visualizer.h>
 #include <vtkRenderWindow.h>
 #include <QVTKWidget.h>
-
-/*****************************************************************************
-** Namespace
-*****************************************************************************/
+#include <opencv2/opencv.hpp>
+#include <QTimer>
+#include <sys/time.h>
 
 namespace LaserScannerApplication {
 
-/*****************************************************************************
-** Interface [MainWindow]
-*****************************************************************************/
 /**
  * @brief Qt central, all operations relating to the view part here.
  */
@@ -40,6 +32,8 @@ public:
     void closeEvent(QCloseEvent *event); // Overloaded function
     void showNoMasterMessage();
     void performAutoScan();
+    void performContScan();
+    void performContScan2();
 
 public Q_SLOTS:
     //Auto connections
@@ -50,14 +44,18 @@ public Q_SLOTS:
     void on_button_load_picture_clicked(bool check);
     void on_button_auto_scan_clicked(bool check);
     void on_button_set_ref_images_clicked(bool check);
+    void on_button_cont_scan_clicked(bool check);
     //Manual connections
+    void opencvCheckBox_changed(bool check);
     void readCurrentAngle(double d);
     void updateTopics(QStringList list);
-    void toggleFilter(bool filter);
-    void updateView(int i);
+    void updateView();
     void toggleLasers(bool check);
     cv::Mat getImage(int lasers);
     void updatePointCloudViewer();
+    void grabAndSaveBefore();
+    void grabAndSaveAfterLeft();
+    void grabAndSaveAfterRight();
 
 Q_SIGNALS:
     void getTopics();
@@ -79,17 +77,31 @@ private:
     cv::Mat processImageSet(cv::Mat before, cv::Mat after, cv::Mat referenceBefore, cv::Mat referenceAfter);
     void performTriangulation(double amountRotated, cv::Mat img, cv::Mat color_img, pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, bool leftSide);
     void save_picture(cv::Mat picture, int number, bool after, bool reference, bool final, bool leftSide);
+    cv::Mat restore_picture(int number, bool after, bool reference, bool final, bool leftSide);
     bool drawPointCloud;
     bool pointCloudWidgetAdded;
     boost::atomic_bool wait_for_processing_pic;
     boost::atomic_bool new_pic_to_present;
     boost::atomic_bool new_mat_to_convert;
     boost::atomic_bool wait_for_point_cloud_viewer;
+    boost::atomic_bool wait_for_scan;
     void spawnPointCloudWidget();
     void updateFilteredImage(bool left, bool right);
     void updateImageToShow(cv::Mat image);
     bool isImagePipelineReady();
+    void grabAndSave(int number, bool after, bool reference, bool final, bool leftSide);
     QImage toShow;
+    cv::VideoCapture cap;
+    QTimer *timer;
+    const QTimer *timer2;
+    int counter;
+    timeval start; // XXX: Debug start time value
+    cv::Mat cameraMatrix, distCoeffs;
+    cv::Mat getErodedImage(cv::Mat input, int erosion_size);
+    cv::Mat getContours(cv::Mat input);
+    cv::Mat getThresholdImage(cv::Mat input);
+    cv::Mat getGaussianBlurSharpenedImage(cv::Mat input);
+    cv::Mat getMedianFilteredImage(cv::Mat input, int kernel_size);
 };
 
 }  // namespace LaserScannerApplication

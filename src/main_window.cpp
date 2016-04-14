@@ -5,9 +5,6 @@
  *
  * @date February 2011
  **/
-/*****************************************************************************
-** Includes
-*****************************************************************************/
 
 #include <QtGui>
 #include <QMessageBox>
@@ -17,17 +14,9 @@
 #include "../include/LaserScannerApplication/QImageCvMat.hpp"
 #include <boost/thread.hpp>
 
-/*****************************************************************************
-** Namespaces
-*****************************************************************************/
-
 namespace LaserScannerApplication {
 
 using namespace Qt;
-
-/*****************************************************************************
-** Implementation [MainWindow]
-*****************************************************************************/
 
 MainWindow::MainWindow(int argc, char** argv, QWidget *parent)
     : QMainWindow(parent)
@@ -77,33 +66,16 @@ MainWindow::MainWindow(int argc, char** argv, QWidget *parent)
     QObject::connect(this, SIGNAL(subscribeToImage(QString)), &qnode, SLOT(subscribeToImage(QString)));
 
     // Signal that we should update our view
-    QObject::connect(&qnode, SIGNAL(updateView(int)), this, SLOT(updateView(int)));
+    QObject::connect(&qnode, SIGNAL(updateView(int)), this, SLOT(updateView()));
+
+    // Signal that we have chosen to use opencv camera grabber
+    QObject::connect(ui->opencvCheckBox, SIGNAL(toggled(bool)), this, SLOT(opencvCheckBox_changed(bool)));
 
     // Toggle lasers upon request of override
     QObject::connect(ui->toggleLeftLaserCheckBox, SIGNAL(toggled(bool)), this, SLOT(toggleLasers(bool)));
     QObject::connect(ui->toggleRightLaserCheckBox, SIGNAL(toggled(bool)), this, SLOT(toggleLasers(bool)));
 
-    // Ensure the viewer is updated when a control is manipulated
-    QObject::connect(ui->blueSliderMin, SIGNAL(valueChanged(int)), this, SLOT(updateView(int)));
-    QObject::connect(ui->blueSliderMax, SIGNAL(valueChanged(int)), this, SLOT(updateView(int)));
-    QObject::connect(ui->greenSliderMin, SIGNAL(valueChanged(int)), this, SLOT(updateView(int)));
-    QObject::connect(ui->greenSliderMax, SIGNAL(valueChanged(int)), this, SLOT(updateView(int)));
-    QObject::connect(ui->redSliderMin, SIGNAL(valueChanged(int)), this, SLOT(updateView(int)));
-    QObject::connect(ui->redSliderMax, SIGNAL(valueChanged(int)), this, SLOT(updateView(int)));
-    QObject::connect(ui->medianSlider, SIGNAL(valueChanged(int)), this, SLOT(updateView(int)));
-    QObject::connect(ui->erosionSlider, SIGNAL(valueChanged(int)), this, SLOT(updateView(int)));
-    QObject::connect(ui->cannySlider, SIGNAL(valueChanged(int)), this, SLOT(updateView(int)));
-    QObject::connect(ui->checkBox, SIGNAL(toggled(bool)), this, SLOT(toggleFilter(bool)));
-    QObject::connect(ui->diffCheckBox, SIGNAL(toggled(bool)), this, SLOT(toggleFilter(bool)));
-    QObject::connect(ui->diffReferenceCheckBox, SIGNAL(toggled(bool)), this, SLOT(toggleFilter(bool)));
-    QObject::connect(ui->medianCheckBox, SIGNAL(toggled(bool)), this, SLOT(toggleFilter(bool)));
-    QObject::connect(ui->erosionCheckBox, SIGNAL(toggled(bool)), this, SLOT(toggleFilter(bool)));
-    QObject::connect(ui->mainCheckBox, SIGNAL(toggled(bool)), this, SLOT(toggleFilter(bool)));
-    QObject::connect(ui->sharpeningCheckBox, SIGNAL(toggled(bool)), this, SLOT(toggleFilter(bool)));
-    QObject::connect(ui->cannyCheckBox, SIGNAL(toggled(bool)), this, SLOT(toggleFilter(bool)));
-    QObject::connect(ui->cropingCheckBox, SIGNAL(toggled(bool)), this, SLOT(toggleFilter(bool)));
-
-    setlocale (LC_NUMERIC, "C");
+    setlocale(LC_NUMERIC, "C");
 
     ui->textbox_path->setText("/home/minions");
     ui->saveCheckBox->setEnabled(false);
@@ -111,6 +83,13 @@ MainWindow::MainWindow(int argc, char** argv, QWidget *parent)
     wait_for_processing_pic = false;
     new_pic_to_present = false;
     new_mat_to_convert = false;
+    wait_for_scan = false;
+
+    // We should load the camera calibration matrix.
+    // XXX: This is a hack, as it is not portable between cameras. But it will do for now
+    cv::FileStorage fs2("/home/minions/Workspaces/minion_ws/c930_camera_data.xml", cv::FileStorage::READ);
+    fs2["Camera_Matrix"] >> cameraMatrix;
+    fs2["Distortion_Coefficients"] >> distCoeffs;
 
     // Init ROS
     qnode.init();
@@ -127,6 +106,44 @@ void MainWindow::updateTopics(QStringList list)
 {
     ui->comboBox->clear();
     ui->comboBox->addItems(list);
+}
+
+void MainWindow::opencvCheckBox_changed(bool check)
+{
+    if (check) {
+        // open the default camera, use something different from 0 otherwise;
+        // Check VideoCapture documentation.
+        if(!cap.open(0)) {
+            std::cout << "Failed to open camera!" << std::endl;
+            return;
+        }
+
+        timer = new QTimer(this);
+        connect(timer, SIGNAL(timeout()), this, SLOT(updateView()));
+
+        // XXX: Select one of the two options
+        if (false) {
+            std::cout << cap.set(CV_CAP_PROP_FRAME_WIDTH, 2304) << std::endl;
+            std::cout << cap.set(CV_CAP_PROP_FRAME_HEIGHT, 1536) << std::endl;
+            std::cout << cap.set(CV_CAP_PROP_FPS, 2) << std::endl;
+            timer->start(500);
+        } else if (false) {
+            std::cout << cap.set(CV_CAP_PROP_FRAME_WIDTH, 1920) << std::endl;
+            std::cout << cap.set(CV_CAP_PROP_FRAME_HEIGHT, 1080) << std::endl;
+            std::cout << cap.set(CV_CAP_PROP_FPS, 5) << std::endl;
+            timer->start(200);
+        } else {
+            std::cout << cap.set(CV_CAP_PROP_FRAME_WIDTH, 1920) << std::endl;
+            std::cout << cap.set(CV_CAP_PROP_FRAME_HEIGHT, 1080) << std::endl;
+            std::cout << cap.set(CV_CAP_PROP_FPS, 30) << std::endl;
+            timer->start(33);
+        }
+    } else {
+        if (timer) {
+            timer->stop();
+            delete timer;
+        }
+    }
 }
 
 void MainWindow::on_button_refresh_topic_clicked(bool check)
@@ -164,11 +181,121 @@ void MainWindow::toggleLasers(bool check)
     }
 }
 
+cv::Mat MainWindow::getThresholdImage(cv::Mat input)
+{
+    cv::Mat return_mat = input;
+
+    if (input.type() != CV_8UC1) {
+        // Convert the image to grayscale
+        cvtColor(input, return_mat, CV_BGR2GRAY);
+    }
+
+    cv::Mat return_mat_binary;
+    cv::threshold(return_mat, return_mat_binary, 120, 255, 0);
+    return return_mat_binary;
+}
+
+cv::Mat MainWindow::getSecondOrderDerivativeOfImage(cv::Mat input)
+{
+    int kernel_size = 3;
+    int scale = 1;
+    int delta = 0;
+    int ddepth = CV_16S;
+
+    // Convert the image to grayscale
+    cv::Mat input_gray;
+    cv::cvtColor(input, input_gray, CV_BGR2GRAY);
+
+    // Apply Laplacian transformation
+    cv::Mat return_mat;
+    cv::Laplacian(input_gray, return_mat, ddepth, kernel_size, scale, delta, cv::BORDER_DEFAULT);
+
+    // Change format
+    cv::Mat return_mat_formatted;
+    return_mat.convertTo(return_mat_formatted, CV_8UC3);
+
+    return return_mat_formatted;
+}
+
+cv::Mat MainWindow::getContours(cv::Mat input)
+{
+    cv::vector<cv::vector<cv::Point> > contours;
+    cv::vector<cv::Vec4i> hierarchy;
+
+    cv::findContours(input, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, cv::Point(0, 0));
+
+    // Draw contours
+    cv::Mat final = cv::Mat::zeros(input.size(), CV_8UC1 );
+
+    for(uint i = 0; i < contours.size(); i++) {
+        cv::Scalar color = cv::Scalar(255);
+        cv::drawContours(final, contours, i, color, 1, 4, hierarchy, 2, cv::Point() );
+    }
+
+    return final;
+}
+
+cv::Mat MainWindow::getErodedImage(cv::Mat input, int erosion_size)
+{
+    cv::Mat element = getStructuringElement(cv::MORPH_RECT,
+                                            cv::Size(2*erosion_size + 1, 2*erosion_size + 1),
+                                            cv::Point(erosion_size, erosion_size));
+    cv::Mat return_mat;
+
+    // Apply the erosion operation
+    cv::erode(input, return_mat, element);
+
+    return return_mat;
+}
+
+cv::Mat MainWindow::getGaussianBlurSharpenedImage(cv::Mat input)
+{
+    cv::Mat temp;
+    cv::Mat return_mat;
+    cv::GaussianBlur(input, temp, cv::Size(0, 0), 3);
+    cv::addWeighted(input, 3, temp, -1, 0, return_mat);
+    return return_mat;
+}
+
+cv::Mat MainWindow::getMedianFilteredImage(cv::Mat input, int kernel_size)
+{
+    int kernelSize = kernel_size;
+
+    if (kernelSize % 2 != 1)
+        kernelSize = kernelSize - 1;
+
+    if (kernelSize < 1)
+        kernelSize = 1;
+
+    cv::Mat return_mat;
+
+    cv::medianBlur(input, return_mat, kernelSize);
+
+    return return_mat;
+}
+
 cv::Mat MainWindow::processImageSet(cv::Mat before, cv::Mat after, cv::Mat referenceBefore, cv::Mat referenceAfter)
 {
-    cv::Mat final = after;
+    cv::Mat final;
+    cv::Mat backup;
     cv::Mat temp;
-    cv::Mat backup = after;
+    cv::Mat before_loc;
+    cv::Mat ref_before_loc;
+    cv::Mat ref_after_loc;
+
+    if (ui->upsampleCheckBox->isChecked()) {
+        cv::pyrUp(after, final, cv::Size(final.cols*2, final.rows*2));
+        cv::pyrUp(after, backup, cv::Size(final.cols*2, final.rows*2));
+        cv::pyrUp(before, before_loc, cv::Size(final.cols*2, final.rows*2));
+        cv::pyrUp(referenceBefore, ref_before_loc, cv::Size(final.cols*2, final.rows*2));
+        cv::pyrUp(referenceAfter, ref_after_loc, cv::Size(final.cols*2, final.rows*2));
+    } else {
+        final = after;
+        backup = after;
+        before_loc = before;
+        ref_before_loc = referenceBefore;
+        ref_after_loc = referenceAfter;
+    }
 
     if (ui->crossHairCheckBox->isChecked()) {
         cv::Point2i leftMid;
@@ -205,13 +332,13 @@ cv::Mat MainWindow::processImageSet(cv::Mat before, cv::Mat after, cv::Mat refer
     }
 
     if (ui->diffCheckBox->isChecked() && ui->mainCheckBox->isChecked()) {
-        cv::absdiff(before, after, temp);
+        cv::absdiff(before_loc, after, temp);
         final = temp;
     }
 
     if (ui->diffReferenceCheckBox->isChecked() && ui->mainCheckBox->isChecked()) {
         cv::Mat referenceDiff;
-        cv::absdiff(referenceBefore, referenceAfter, referenceDiff);
+        cv::absdiff(ref_before_loc, ref_after_loc, referenceDiff);
         cv::absdiff(final, referenceDiff, temp);
         final = temp;
     }
@@ -233,52 +360,23 @@ cv::Mat MainWindow::processImageSet(cv::Mat before, cv::Mat after, cv::Mat refer
     }
 
     if (ui->sharpeningCheckBox->isChecked() && ui->mainCheckBox->isChecked()) {
-        cv::Mat temp2;
-        cv::GaussianBlur(final, temp2, cv::Size(0, 0), 5);
-        cv::addWeighted(final, 3, temp2, -1, 0, temp);
-        final = temp;
+        final = getGaussianBlurSharpenedImage(final);
     }
 
     if (ui->medianCheckBox->isChecked() && ui->mainCheckBox->isChecked()) {
         // Post-processing to remove noise
-        int kernelSize = ui->medianSlider->value();
-
-        if (kernelSize % 2 != 1)
-            kernelSize = kernelSize - 1;
-
-        if (kernelSize < 1)
-            kernelSize = 1;
-
-        cv::medianBlur(final, temp, kernelSize);
-        final = temp;
+        final = getMedianFilteredImage(final, ui->medianSlider->value());
     }
 
     if (ui->erosionCheckBox->isChecked() && ui->mainCheckBox->isChecked()) {
-        int erosion_size = ui->erosionSlider->value();
-        cv::Mat element = getStructuringElement(cv::MORPH_RECT,
-                                                cv::Size( 2*erosion_size + 1, 2*erosion_size+1 ),
-                                                cv::Point( erosion_size, erosion_size ) );
-        // Apply the erosion operation
-        erode(final, temp, element );
-        final = temp;
+        final = getErodedImage(final, ui->erosionSlider->value());
     }
 
     if (ui->cannyCheckBox->isChecked() && ui->mainCheckBox->isChecked()) {
         // Detect edges using canny
         cv::Canny(final, temp, ui->cannySlider->value(), 255, 3 , true);
 
-        cv::vector<cv::vector<cv::Point> > contours;
-        cv::vector<cv::Vec4i> hierarchy;
-
-        // Find contours
-        findContours(temp, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, cv::Point(0, 0) );
-
-        // Draw contours
-        final = cv::Mat::zeros(temp.size(), CV_8UC1 );
-        for(uint i = 0; i < contours.size(); i++) {
-            cv::Scalar color = cv::Scalar(255);
-            drawContours(final, contours, i, color, 2, -2, hierarchy, 2, cv::Point() );
-        }
+        final = getContours(temp);
     }
 
     if (ui->cropingCheckBox->isChecked()) {
@@ -303,18 +401,45 @@ void MainWindow::performTriangulation(double amountRotated, cv::Mat img, cv::Mat
     double radiansToDegrees = 180.0 / 3.14159265359;
     double degreesToRadians = 3.14159265359 / 180.0;
 
-    double laser_angle = ui->degreeLaserAngle->value();
+    double cam_focal_distance_pixels;
 
     // These values are not perfect, but the variance between cameras is good enough for now
     // Assumes hd resolution is used
-    double cam_focal_distance_pixels = 1081.37;
-    //double cam_focal_distance_mm = 3.291;
-    //double cam_cx = 959.5;
-    //double cam_cy = 539.5;
+    if (true) {
+        // Camera parameters for Logitech C930e
+        cam_focal_distance_pixels = cameraMatrix.at<double>(0, 0);
+        //cam_focal_distance_pixels = 1163.93259;
+        /*
+        <FocalLength>
+        <X>1163.93259</X>
+        <Y>1166.94320</Y>
+        </FocalLength>
+        <PrincipalPoint>
+        <X>931.83371</X>
+        <Y>554.87796</Y>
+        </PrincipalPoint>
+        <Distortion>
+        <k1>0.05243</k1>
+        <k2>-0.12924</k2>
+        <p1>0.00491</p1>
+        <p2>0.00709</p2>
+        </Distortion>
+        </Camera>
+        */
+    } else {
+        // Camera parameters for Kinect V2
+        cam_focal_distance_pixels = 1081.37;
+        //double cam_focal_distance_mm = 3.291;
+        //double cam_cx = 959.5;
+        //double cam_cy = 539.5;
 
-    //double cam_fov_hor = 84.1; // Degrees
-    //double cam_fov_vert = 53.8;
-    //double cam_tilt_angle = 0.0; // Degrees
+        //double cam_fov_hor = 84.1; // Degrees
+        //double cam_fov_vert = 53.8;
+        //double cam_tilt_angle = 0.0; // Degrees
+    }
+
+    double laser_angle = ui->degreeLaserAngle->value();
+
     double cam_center_dist = 300.0; // mm
     double laser_cam_dist = cam_center_dist*tan(laser_angle*degreesToRadians);
     double laser_center_dist = cam_center_dist / cos(laser_angle*degreesToRadians);
@@ -368,6 +493,7 @@ void MainWindow::performTriangulation(double amountRotated, cv::Mat img, cv::Mat
 
                 if (sum > 70 && sum > brightestX) {
 //                    std::cout << "  Pixel at " << y << ", " << x << " is " << sum << std::endl;
+                    found_first_x = true;
                     brightestX = x;
                 }
             } else {
@@ -388,31 +514,37 @@ void MainWindow::performTriangulation(double amountRotated, cv::Mat img, cv::Mat
         // If we are using brightness values, we want to continue with the next row if we did not find a decently large value
         if (ui->brightnessCheckBox->isChecked() && brightestX == 0) {
             continue;
-        } else {
-            // XXX: This is a slight hack, but whatevvas!
-            found_first_x = true;
         }
 
         if (found_first_x) {
-            double average_x = ui->brightnessCheckBox->isChecked() ? (double) brightestX : double (first_x + last_x)/2;
+            double average_x = ui->brightnessCheckBox->isChecked() ? (double) brightestX : (double) (first_x + last_x)/2;
+
+            if (average_x < 200.0 || average_x > 1800.0) {
+                std::cout << "averagex has weird value of " << average_x << std::endl;
+                continue;
+            }
 
             double pixel_angle_x;
             if (leftSide) {
-                pixel_angle_x = atan2(average_x - (cam_res_hor/2), cam_focal_distance_pixels)*radiansToDegrees;
+                pixel_angle_x = atan2(average_x - (cam_res_hor/2.0), cam_focal_distance_pixels)*radiansToDegrees;
             } else {
-                pixel_angle_x = atan2(average_x - (cam_res_hor/2), cam_focal_distance_pixels)*radiansToDegrees;
+                pixel_angle_x = atan2(average_x - (cam_res_hor/2.0), cam_focal_distance_pixels)*radiansToDegrees;
             }
 
-            double pixel_angle_hor_x = (90 - pixel_angle_x);
-            double laser_hor_angle = (180 - 90 - laser_angle);
+            double pixel_angle_hor_x = (90.0 - pixel_angle_x);
+            double laser_hor_angle = (180.0 - 90.0 - laser_angle);
 
             if (laser_hor_angle < 0.0)
                 std::cout << "Hor_angle negative" << std::endl;
 
-            double laser_cam_angle = 180 - pixel_angle_hor_x - laser_hor_angle;
+            double laser_cam_angle = 180.0 - pixel_angle_hor_x - laser_hor_angle;
 
-            if (laser_cam_angle < 0.0)
-                std::cout << "Laser_cam_angle negative" << std::endl;
+            if (laser_cam_angle < 0.0) {
+                // XXX: This means that the scanning is going through the center, and out on the other side.
+                //std::cout << "Laser_cam_angle negative" << std::endl;
+                //std::cout << "Pixel_angle_hor_x is " << pixel_angle_hor_x << " and laser_hor_angle is " << laser_hor_angle << std::endl;
+                continue;
+            }
 
             double laser_cam_plane_dist = laser_cam_dist*sin(pixel_angle_hor_x*degreesToRadians)/sin(laser_cam_angle*degreesToRadians);
 
@@ -425,14 +557,19 @@ void MainWindow::performTriangulation(double amountRotated, cv::Mat img, cv::Mat
             double radius = laser_center_dist - laser_cam_plane_dist;
 
             // Don't bother adding the point if it is outside our defined radius
-            if (radius > ui->radiusSlider->value()) {
+            if (radius > ui->radiusSlider->value() && ui->radiusSlider->value() != 0) {
                 std::cout << "Radius to big" << std::endl;
+                continue;
+            }
+
+            if (pixel_angle_hor_x < 0.0 || pixel_angle_hor_x > 180.0 - laser_hor_angle) {
+                std::cout << "Pixel angle hor x has weird value of " << pixel_angle_hor_x << std::endl;
                 continue;
             }
 
             // Radius is negative, that's not good
             if (radius < 0.0) {
-                std::cout << "Radius negative" << std::endl;
+                //std::cout << "Radius negative" << std::endl;
                 continue;
             }
 
@@ -451,12 +588,17 @@ void MainWindow::performTriangulation(double amountRotated, cv::Mat img, cv::Mat
 
             double z_pos = y / cam_focal_distance_pixels * cam_cam_plane_dist;
 
-            cv::Vec3b bgrPixel = color_img.at<cv::Vec3b>(y, average_x);
-
             pcl::PointXYZRGB *point = new pcl::PointXYZRGB;
-            point->r = bgrPixel[0];
-            point->g = bgrPixel[1];
-            point->b = bgrPixel[2];
+            if (ui->diffCheckBox->isChecked()) {
+                cv::Vec3b bgrPixel = color_img.at<cv::Vec3b>(y, average_x);
+                point->r = bgrPixel[0];
+                point->g = bgrPixel[1];
+                point->b = bgrPixel[2];
+            } else {
+                point->r = 100;
+                point->g = 100;
+                point->b = 100;
+            }
             point->x = x_pos;
             point->y = y_pos;
             point->z = z_pos;
@@ -465,10 +607,11 @@ void MainWindow::performTriangulation(double amountRotated, cv::Mat img, cv::Mat
         }
 
         double averageRad = radSum/radCounter;
-        std::cout << "Radius is: " << averageRad << std::endl;
+        //std::cout << "Radius is: " << averageRad << std::endl;
         radSum = 0.0;
         radCounter = 0;
     }
+    std::cout << "We are done calculating the stuffs" << std::endl;
 }
 
 void MainWindow::readCurrentAngle(double d){
@@ -514,6 +657,35 @@ void MainWindow::save_picture(cv::Mat picture, int number, bool after, bool refe
     cv::imwrite(url.toUtf8().constData(), picture);
 }
 
+cv::Mat MainWindow::restore_picture(int number, bool after, bool reference, bool final, bool leftSide)
+{
+    QString url = ui->textbox_path->toPlainText();
+    url.append("/");
+    url.append(ui->fileName->text());
+    url.append("_");
+    url.append(QString("%1").arg(number, 3, 10, QChar('0')));
+
+    if (reference)
+        url.append("_reference");
+    if (final) {
+        url.append("_final");
+    } else if (after) {
+        url.append("_after");
+    } else {
+        url.append("_before");
+    }
+
+    if (leftSide && !reference) {
+        url.append("_left");
+    } else if (!reference){
+        url.append("_right");
+    }
+
+    url.append(".png");
+    return cv::imread(url.toUtf8().constData());
+}
+
+
 void MainWindow::on_button_set_ref_images_clicked(bool check)
 {
     // Get an image with the lasers on
@@ -527,15 +699,346 @@ void MainWindow::on_button_set_ref_images_clicked(bool check)
     ui->diffReferenceCheckBox->setEnabled(true);
 }
 
+void MainWindow::on_button_cont_scan_clicked(bool check)
+{
+//    performContScan2();
+    // We need to spawn a worker thread as to not block the GUI
+    boost::thread* thr = new boost::thread(boost::bind(&MainWindow::performContScan2, this));
+}
+
 void MainWindow::on_button_auto_scan_clicked(bool check)
 {
     // We need to spawn a worker thread as to not block the GUI
     boost::thread* thr = new boost::thread(boost::bind(&MainWindow::performAutoScan, this));
-    ui->button_auto_scan->setEnabled(false);
+}
+
+void MainWindow::grabAndSave(int number, bool after, bool reference, bool final, bool leftSide)
+{
+    std::cout << "Ran Grab&Save" << std::endl;
+    cv::Mat pic;
+    if (left && right) {
+        // Get an image with both lasers on
+        pic = getImage(3);
+    } else if (left) {
+        // Get an image with left laser on
+        pic = getImage(1);
+    } else if (right) {
+        // Get an image with right laser on
+        pic = getImage(2);
+    } else {
+        // Get an image with the lasers off
+        pic = getImage(0);
+    }
+    save_picture(pic, number, false, false, false, true);
+
+    if (isImagePipelineReady()) {
+        matToShow = pic.clone();
+        new_mat_to_convert = true;
+    }
+}
+
+void MainWindow::grabAndSaveBefore()
+{
+    grabAndSave(counter, false, false, false, false);
+    counter++;
+}
+
+void MainWindow::grabAndSaveAfterLeft()
+{
+    grabAndSave(counter, true, false, false, true);
+    counter++;
+}
+
+void MainWindow::grabAndSaveAfterRight()
+{
+    grabAndSave(counter, true, false, false, false);
+    counter++;
+}
+
+void MainWindow::performContScan2()
+{
+    wait_for_scan = true;
+
+    double old_val = ui->current_position->value();
+
+    counter = 0;
+
+    if (ui->diffCheckBox->isChecked()) {
+        std::cout << "Let's get the before images" << std::endl;
+
+        timer2 = new QTimer(this);
+        connect(timer2, SIGNAL(timeout()), this, SLOT(grabAndSaveBefore()));
+
+        Q_EMIT setAngle(old_val + 360.0);
+        timer->start(30);
+
+        while (ui->current_position->value() < old_val + 359.7);
+        timer->stop();
+
+        // Move into position for next round
+        Q_EMIT setAngle(old_val + 360.0);
+
+        old_val = old_val + 360;
+    }
+
+    int beforeCounter = counter;
+
+    if (ui->toggleUseLeftLaserCheckBox->isChecked()) {
+        std::cout << "Let's get the left after images" << std::endl;
+        counter = 0;
+
+        timer2 = new QTimer(this);
+        connect(timer2, SIGNAL(timeout()), this, SLOT(grabAndSaveAfterLeft()));
+
+        Q_EMIT setAngle(old_val + 360.0);
+        timer->start(30);
+
+        while (ui->current_position->value() < old_val + 359.7);
+        timer->stop();
+
+        // Move into position for next round
+        Q_EMIT setAngle(old_val + 360.0);
+
+        old_val = old_val + 360;
+    }
+
+    int afterLeftCounter = counter;
+
+    if (ui->toggleUseRightLaserCheckBox->isChecked()) {
+        std::cout << "Let's get the right after images" << std::endl;
+        counter = 0;
+
+        timer2 = new QTimer();
+        connect(timer2, SIGNAL(timeout()), this, SLOT(grabAndSaveAfterRight()));
+
+        Q_EMIT setAngle(old_val + 360.0);
+        timer->start(30);
+
+        while (ui->current_position->value() < old_val + 359.7);
+        timer->stop();
+    }
+
+    int afterRightCounter = counter;
+
+    if (beforeCounter < counter && beforeCounter != 0)
+        counter = beforeCounter;
+    if (afterRightCounter < counter && afterRightCounter != 0)
+        counter = afterRightCounter;
+    if (afterLeftCounter < counter && afterLeftCounter != 0)
+        counter = afterLeftCounter;
+
+    double deg_per_pic = 360 / counter;
+
+    int iterations = counter;
+
+    // We have not set the point cloud viewer visible, we need to do that
+    spawnPointCloudWidget();
+
+    // Change from image to point cloud visualization
+    drawPointCloud = true;
+
+    for (int i = 0; i < iterations; i++) {
+        cv::Mat local_filtered;
+        cv::Mat before;
+
+        if (ui->diffCheckBox->isChecked()) {
+            // Get the image with the lasers off
+            before = restore_picture(i, false, false, false, true);
+        }
+
+        if (ui->toggleUseLeftLaserCheckBox->isChecked()) {
+            // Get the image with the left laser on
+            cv::Mat after = restore_picture(i, true, false, false, true);
+
+            // Process image and perform triangulation
+            local_filtered = processImageSet(before, after, referenceBefore, referenceAfter);
+            performTriangulation(deg_per_pic*((double) i), local_filtered, before, this->cloud, true);
+            save_picture(local_filtered, i, false, false, true, true);
+        }
+
+        if (ui->toggleUseRightLaserCheckBox->isChecked()) {
+            // Get an image with the right laser on
+            cv::Mat after = restore_picture(i, true, false, false, false);
+
+            // Process image and perform triangulation
+            local_filtered = processImageSet(before, after, referenceBefore, referenceAfter);
+            performTriangulation(deg_per_pic*((double) i), local_filtered, before, this->cloud, false);
+            save_picture(local_filtered, i, false, false, true, false);
+        }
+
+        if (isImagePipelineReady()) {
+            matToShow = local_filtered.clone();
+            new_mat_to_convert = true;
+        }
+
+        // Update the point-cloud-viewer with the newly scanned strips
+        if (!wait_for_point_cloud_viewer)
+            Q_EMIT updatePointCloudViewer();
+    }
+
+    // We need to do a simple spin() of the point cloud viewer to not block it when it is done
+    pointCloudViewer->spin();
+
+    // Save the point cloud to a pcd file
+    QString url = ui->textbox_path->toPlainText();
+    url.append("/");
+    url.append(ui->fileName->text());
+    url.append(".pcd");
+    pcl::io::savePCDFileBinary(url.toUtf8().constData(), *cloud);
+
+    wait_for_scan = false;
+}
+
+void MainWindow::performContScan()
+{
+    wait_for_scan = true;
+
+    double deg_per_pic = ui->degree_auto_scan->value();
+    int iterations = (int) ((double) 360 / deg_per_pic);
+    double shadow_position = 0.0;
+
+    int i = 0;
+
+    double old_val = ui->current_position->value();
+
+    std::cout << "Let's get the before images" << std::endl;
+
+    for (i = 0; i < iterations; i++) {
+        std::cout << "  Before image number " << i << std::endl;
+    //while (ui->current_position->value() < old_val + 360.0) {
+        double new_pos = old_val + i*deg_per_pic;
+
+        // Get an image with the lasers off
+        cv::Mat before = getImage(0);
+        save_picture(before, i, false, false, false, true);
+
+        if (isImagePipelineReady()) {
+            matToShow = before.clone();
+            new_mat_to_convert = true;
+        }
+
+        // Increment the angle
+        Q_EMIT setAngle(new_pos);
+
+        std::cout << "      Done with number " << i << std::endl;
+        //i++;
+    }
+
+    i = 0;
+    old_val = ui->current_position->value();
+
+    if (ui->toggleUseLeftLaserCheckBox->isChecked()) {
+        std::cout << "Let's get the left after images" << std::endl;
+        for (i = 0; i < iterations; i++) {
+            std::cout << "  Left after image number " << i << std::endl;
+        //while (ui->current_position->value() < old_val + 360.0) {
+            double new_pos = old_val + i*deg_per_pic;
+
+            // Get an image with the left laser on
+            cv::Mat after = getImage(1);
+            save_picture(after, i, true, false, false, true);
+
+            if (isImagePipelineReady()) {
+                matToShow = after.clone();
+                new_mat_to_convert = true;
+            }
+
+            // Increment the angle
+            Q_EMIT setAngle(new_pos);
+
+            std::cout << "      Done with number " << i << std::endl;
+            //i++;
+        }
+    }
+
+    i = 0;
+    old_val = ui->current_position->value();
+
+    if (ui->toggleUseRightLaserCheckBox->isChecked()) {
+        std::cout << "Let's get the right after images" << std::endl;
+        for (i = 0; i < iterations; i++) {
+            std::cout << "  Right after image number " << i << std::endl;
+        //while (ui->current_position->value() < old_val + 360.0) {
+            double new_pos = old_val + i*deg_per_pic;
+
+            // Get an image with the right laser on
+            cv::Mat after = getImage(2);
+            save_picture(after, i, true, false, false, false);
+
+            if (isImagePipelineReady()) {
+                matToShow = after.clone();
+                new_mat_to_convert = true;
+            }
+
+            // Increment the angle
+            Q_EMIT setAngle(new_pos);
+
+            std::cout << "      Done with number " << i << std::endl;
+            //i++;
+        }
+    }
+
+    i = 0;
+
+    // We have not set the point cloud viewer visible, we need to do that
+    spawnPointCloudWidget();
+
+    // Change from image to point cloud visualization
+    drawPointCloud = true;
+
+    for (i = 0; i < iterations; i++) {
+        cv::Mat local_filtered;
+
+        // Get the image with the lasers off
+        cv::Mat before = restore_picture(i, false, false, false, true);
+
+        if (ui->toggleUseLeftLaserCheckBox->isChecked()) {
+            // Get the image with the left laser on
+            cv::Mat after = restore_picture(i, true, false, false, true);
+
+            // Process image and perform triangulation
+            local_filtered = processImageSet(before, after, referenceBefore, referenceAfter);
+            performTriangulation(deg_per_pic*((double) i), local_filtered, before, this->cloud, true);
+            save_picture(local_filtered, i, false, false, true, true);
+        }
+
+        if (ui->toggleUseRightLaserCheckBox->isChecked()) {
+            // Get an image with the right laser on
+            cv::Mat after = restore_picture(i, true, false, false, false);
+
+            // Process image and perform triangulation
+            local_filtered = processImageSet(before, after, referenceBefore, referenceAfter);
+            performTriangulation(deg_per_pic*((double) i), local_filtered, before, this->cloud, false);
+            save_picture(local_filtered, i, false, false, true, false);
+        }
+
+        if (isImagePipelineReady()) {
+            matToShow = local_filtered.clone();
+            new_mat_to_convert = true;
+        }
+
+        // Update the point-cloud-viewer with the newly scanned strips
+        if (!wait_for_point_cloud_viewer)
+            Q_EMIT updatePointCloudViewer();
+
+    }
+
+    // We need to do a simple spin() of the point cloud viewer to not block it when it is done
+    pointCloudViewer->spin();
+
+    // Save the point cloud to a pcd file
+    QString url = ui->textbox_path->toPlainText();
+    url.append("/");
+    url.append(ui->fileName->text());
+    url.append(".pcd");
+    pcl::io::savePCDFileBinary(url.toUtf8().constData(), *cloud);
+
+    wait_for_scan = false;
 }
 
 void MainWindow::performAutoScan()
 {
+    wait_for_scan = true;
     // XXX: Deactivate filter controls
 
 
@@ -557,10 +1060,14 @@ void MainWindow::performAutoScan()
         double new_pos = old_val + i*deg_per_pic;
 
         cv::Mat local_filtered;
+        cv::Mat before;
+        cv::Mat after;
 
-        // Get an image with the lasers off
-        cv::Mat before = getImage(0);
-        save_picture(before, i, false, false, false, true);
+        if (ui->diffCheckBox->isChecked()) {
+            // Get an image with the lasers off
+            before = getImage(0);
+            save_picture(before, i, false, false, false, true);
+        }
 
         if (ui->toggleUseLeftLaserCheckBox->isChecked()) {
             // Get an image with the left laser on
@@ -575,7 +1082,7 @@ void MainWindow::performAutoScan()
 
         if (ui->toggleUseRightLaserCheckBox->isChecked()) {
             // Get an image with the right laser on
-            cv::Mat after = getImage(2);
+            after = getImage(2);
             save_picture(after, i, true, false, false, false);
 
             // Process image and perform triangulation
@@ -594,13 +1101,17 @@ void MainWindow::performAutoScan()
             Q_EMIT updatePointCloudViewer();
 
         // Increment the angle
-        Q_EMIT setAngle(new_pos);
+        //Q_EMIT setAngle(new_pos);
+
+        qnode.setAngle(new_pos);
 
         // Wait until table has turned into position
         // while (qnode.waitingForAngle());
 
         i++;
     }
+
+    std::cout << "Done autoscanning" << std::endl;
 
     // We need to do a simple spin() of the point cloud viewer to not block it when it is done
     pointCloudViewer->spin();
@@ -613,23 +1124,70 @@ void MainWindow::performAutoScan()
     url.append(ui->fileName->text());
     url.append(".pcd");
     pcl::io::savePCDFileBinary(url.toUtf8().constData(), *cloud);
+
+    wait_for_scan = false;
 }
 
-void MainWindow::toggleFilter(bool filter)
-{
-    updateView(0);
+static const QString type2str(int type) {
+  QString r;
+
+  uchar depth = type & CV_MAT_DEPTH_MASK;
+  uchar chans = 1 + (type >> CV_CN_SHIFT);
+
+  switch ( depth ) {
+    case CV_8U:  r = "8U"; break;
+    case CV_8S:  r = "8S"; break;
+    case CV_16U: r = "16U"; break;
+    case CV_16S: r = "16S"; break;
+    case CV_32S: r = "32S"; break;
+    case CV_32F: r = "32F"; break;
+    case CV_64F: r = "64F"; break;
+    default:     r = "User"; break;
+  }
+
+  r += "C";
+  r += (chans+'0');
+
+  return r;
 }
 
 cv::Mat MainWindow::getImage(int lasers)
 {
-    while (qnode.waitingForAngle() || qnode.waitingForLaser() || qnode.waitingForPic() || qnode.waitingForPicProcessing());
+    if (ui->opencvCheckBox->isChecked()) {
+        cv::Mat image;
 
-    if (!(ui->toggleLeftLaserCheckBox->isChecked() || ui->toggleRightLaserCheckBox->isChecked())) {
-        // Take picture with laser
-        qnode.setLasers(lasers);
+//        while (qnode.waitingForAngle() || qnode.waitingForLaser())
+//            std::cout << "STUCK IN GET IMAGE " << std::endl;;
+
+        if (!(ui->toggleLeftLaserCheckBox->isChecked() || ui->toggleRightLaserCheckBox->isChecked())) {
+            // Take picture with laser
+            qnode.setLasers(lasers);
+        }
+
+        cap >> image;
+
+        assert(!image.empty());
+
+        assert(image.type() == CV_8UC3);
+
+        cv::Mat image2;
+        cv::undistort(image, image2, cameraMatrix, distCoeffs);
+
+        return image2;
+
+    } else {
+        while (qnode.waitingForAngle() || qnode.waitingForLaser() || qnode.waitingForPic() || qnode.waitingForPicProcessing());
+
+        if (!(ui->toggleLeftLaserCheckBox->isChecked() || ui->toggleRightLaserCheckBox->isChecked())) {
+            // Take picture with laser
+            qnode.setLasers(lasers);
+        }
+        cv::Mat image = qnode.getCurrentImage();
+        cv::Mat image2;
+        cv::undistort(image, image2, cameraMatrix, distCoeffs);
+
+        return image2;
     }
-
-    return qnode.getCurrentImage();
 }
 
 void MainWindow::updateFilteredImage(bool left, bool right)
@@ -637,27 +1195,34 @@ void MainWindow::updateFilteredImage(bool left, bool right)
     wait_for_processing_pic = true;
 
     cv::Mat after;
+    cv::Mat before;
 
-    // Get an image with the lasers off
-    cv::Mat before = getImage(0);
+    if (left && right) {
+        // Get an image with both lasers on
+        after = getImage(3);
+    } else if (left) {
+        // Get an image with left laser on
+        after = getImage(1);
+    } else if (right) {
+        // Get an image with right laser on
+        after = getImage(2);
+    } else {
+        // Get an image with the lasers off
+        after = getImage(0);
+    }
+
+    if (ui->diffCheckBox->isChecked()) {
+        // Get an image with the lasers off
+        before = getImage(0);
+    }
 
     if (ui->mainCheckBox->isChecked()) {
-        if (left && right) {
-            // Get an image with both lasers on
-            after = getImage(3);
-        } else if (left) {
-            // Get an image with left laser on
-            after = getImage(1);
-        } else if (right) {
-            // Get an image with right laser on
-            after = getImage(2);
-        } else {
-            // Get an image with the lasers off
-            after = getImage(0);
-        }
+
+        std::cout << " Printing before size " << before.size << " And the after size" << after.size << std::endl;
+
         matToShow = processImageSet(before, after, referenceBefore, referenceAfter).clone();
     } else {
-        matToShow = before.clone();
+        matToShow = after.clone();
     }
 
     new_mat_to_convert = true;
@@ -670,17 +1235,25 @@ bool MainWindow::isImagePipelineReady()
     return !wait_for_processing_pic && !new_pic_to_present && !new_mat_to_convert;
 }
 
-void MainWindow::updateView(int i)
+void MainWindow::updateView()
 {
     // If there is not yet any image to process then we shouldn't try to
-    if (qnode.pictureHasBeenSet()) {
+    if (qnode.pictureHasBeenSet() || ui->opencvCheckBox->isChecked()) {
         // If we have not yet reached the pointcloud stage we should show the image
-        if (!drawPointCloud && isImagePipelineReady()) {
+        if (!drawPointCloud && isImagePipelineReady()  && !wait_for_scan) {
+
+            // XXX: Debug, get time to check processing time
+            gettimeofday(&start, NULL);
 
             wait_for_processing_pic = true; // Need to set this before launching the thread, or else we will fall through on the next if
             boost::thread* thr = new boost::thread(boost::bind(&MainWindow::updateFilteredImage, this,
                                                                ui->toggleUseLeftLaserCheckBox->isChecked(),
                                                                ui->toggleUseRightLaserCheckBox->isChecked()));
+        }
+
+        if (new_mat_to_convert) {
+            boost::thread* thr = new boost::thread(boost::bind(&MainWindow::updateImageToShow, this,
+                                                               this->matToShow));
         }
 
         if (new_pic_to_present) {
@@ -689,11 +1262,20 @@ void MainWindow::updateView(int i)
             // Add the pixmap to the label that presents it
             ui->imageLabel->setPixmap(pixMap);
             new_pic_to_present = false;
-        }
 
-        if (new_mat_to_convert) {
-            boost::thread* thr = new boost::thread(boost::bind(&MainWindow::updateImageToShow, this,
-                                                               this->matToShow));
+            timeval endTime;
+
+            long seconds, useconds;
+            double duration;
+
+            gettimeofday(&endTime, NULL);
+
+            seconds  = endTime.tv_sec  - start.tv_sec;
+            useconds = endTime.tv_usec - start.tv_usec;
+
+            duration = seconds + useconds/1000000.0;
+
+            std::cout << "The processing of the images took " << duration << " seconds" << std::endl;
         }
     }
 }

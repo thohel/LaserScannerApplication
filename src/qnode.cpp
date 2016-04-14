@@ -6,10 +6,6 @@
  * @date February 2011
  **/
 
-/*****************************************************************************
-** Includes
-*****************************************************************************/
-
 #include <ros/ros.h>
 #include <ros/network.h>
 #include <string>
@@ -18,17 +14,12 @@
 #include <sstream>
 #include "../include/LaserScannerApplication/qnode.hpp"
 
-/*****************************************************************************
-** Namespaces
-*****************************************************************************/
-
 namespace LaserScannerApplication {
 
 QNode::QNode(int argc, char** argv ) :
     init_argc(argc),
     init_argv(argv)
     {
-        qRegisterMetaType<pcl::PointCloud<pcl::PointXYZ>::Ptr >("pcl::PointCloud<pcl::PointXYZ>::Ptr");
     }
 
 QNode::~QNode() {
@@ -52,6 +43,7 @@ bool QNode::init() {
     if ( ! ros::master::check() ) {
         return false;
     }
+
     ros::start(); // explicitly needed since our nodehandle is going out of scope.
     ros::NodeHandle n;
     anglesub = n.subscribe<std_msgs::Int32,QNode>("current_angle", 1000, &QNode::angleCallback, this);
@@ -131,8 +123,8 @@ void QNode::imageCallback(const sensor_msgs::ImageConstPtr &image_msg)
 void QNode::setAngle(double angle)
 {
     std_msgs::Int32 msg;
-    //convert from 0-360 to 0-14000 here
-    msg.data = angle*38.8888888;
+    //convert from 0-360 to 0-14400 here
+    msg.data = angle*39.5;
     wait_for_angle.store(true);
     anglepub.publish(msg);
     while (current_angle < angle - 0.1 || current_angle > angle + 0.1); // XXX: This is not good, there should be some infinite-loop-avoidance here
@@ -151,7 +143,7 @@ void QNode::setLasers(int i)
 
 void QNode::angleCallback(const std_msgs::Int32::ConstPtr &msg)
 {
-    current_angle = msg->data*0.0257142857;
+    current_angle = msg->data/39.5;
     Q_EMIT sendCurrentAngle(current_angle);
 }
 
