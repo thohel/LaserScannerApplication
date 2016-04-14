@@ -320,15 +320,15 @@ cv::Mat MainWindow::processImageSet(cv::Mat before, cv::Mat after, cv::Mat refer
         ui->xposSlider->setMinimum(0);
         ui->xposSlider->setMaximum(final.cols);
         ui->xposSlider->setEnabled(true);
-        ui->heightSlider->setMinimum(0);
-        ui->heightSlider->setMaximum(final.cols);
-        ui->heightSlider->setEnabled(true);
         ui->yposSlider->setMinimum(0);
         ui->yposSlider->setMaximum(final.rows);
         ui->yposSlider->setEnabled(true);
         ui->widthSlider->setMinimum(0);
-        ui->widthSlider->setMaximum(final.rows);
+        ui->widthSlider->setMaximum(final.cols);
         ui->widthSlider->setEnabled(true);
+        ui->heightSlider->setMinimum(0);
+        ui->heightSlider->setMaximum(final.rows);
+        ui->heightSlider->setEnabled(true);
     }
 
     if (ui->diffCheckBox->isChecked() && ui->mainCheckBox->isChecked()) {
